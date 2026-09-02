@@ -7,13 +7,16 @@
 import { Navigate, Route, Routes } from "react-router";
 import PortfolioPage from "./PortfolioPage";
 import ToolShell from "./components/ToolShell";
+import { TransitionProvider } from "./components/RouteTransition";
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<PortfolioPage />} />
-      <Route path="/tools/:toolId" element={<ToolShell />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <TransitionProvider>
+      <Routes>
+        <Route path="/" element={<PortfolioPage />} />
+        <Route path="/tools/:toolId" element={<ToolShell />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </TransitionProvider>
   );
 }

@@ -3,10 +3,11 @@
 // =====================================================================
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import GlitchText from "./GlitchText";
 import { about, contact, profile, projects, skills } from "../content";
 import { toolProjectCards } from "../tools";
+import { useNavTransition } from "./RouteTransition";
 
 /* 捲入視野時淡入上移（respect reduced-motion） */
 function FadeIn({
@@ -177,6 +178,15 @@ type ProjectCardData = {
 };
 
 function ProjectCard({ p }: { p: ProjectCardData }) {
+  const navTransition = useNavTransition();
+
+  const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
+    // 一般左鍵無修飾鍵 → 深潛過場；中鍵/新分頁/無障礙保留原生行為
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    navTransition(p.href!, p.title);
+  };
+
   const inner = (
     <>
       <div className="p-idx">{p.idx}</div>
@@ -197,7 +207,7 @@ function ProjectCard({ p }: { p: ProjectCardData }) {
 
   if (p.href) {
     return (
-      <Link className="pcard glass clickable" to={p.href} data-hover>
+      <Link className="pcard glass clickable" to={p.href} data-hover onClick={handleClick}>
         {inner}
       </Link>
     );
