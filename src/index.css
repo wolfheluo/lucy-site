@@ -844,7 +844,19 @@ a.pcard.clickable:hover { cursor: pointer; }
 /* ============================================================
    FILE VAULT（P-04 工具）—— 鎖定畫面 / 保險箱 UI
    ============================================================ */
-.vault { width: min(860px, 100%); margin: 0 auto; }
+.vault {
+  width: min(860px, 100%);
+  margin: 0 auto 4vh;
+  align-self: flex-start;
+  animation: vaultIn .55s var(--ease-out) 1;
+}
+@keyframes vaultIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vault { animation: none; }
+}
 
 /* ---------- 頂列 ---------- */
 .vault-bar {
