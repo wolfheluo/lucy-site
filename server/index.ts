@@ -113,10 +113,12 @@ export function createApp(cfg: ServerConfig = loadConfig()): Hono {
   return app;
 }
 
-// 直接執行（非被測試 import）才 listen
-const isMain =
+// 直接執行才 listen：
+//  - node dist-server/server/index.js（argv[1] 是自身）
+//  - pm2/systemd 等管理器（argv[1] 是包裝檔）→ 用 START_SERVER=1 env
+const isDirectRun =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (isMain) {
+if (isDirectRun || process.env.START_SERVER === "1") {
   const cfg = loadConfig();
   const app = createApp(cfg);
   serve({ fetch: app.fetch, port: cfg.port }, (info) => {
