@@ -10,12 +10,30 @@ class SoundEngine {
   private musicNodes: { osc: OscillatorNode[]; filter: BiquadFilterNode; lfo: OscillatorNode } | null = null;
   private chordTimer: number | null = null;
   private chordIndex = 0;
+  /** 是否已收到首次使用者手勢（autoplay 政策解鎖） */
+  private unlocked = false;
 
   muted = false;
 
-  /** lazy init; must be called from a user gesture */
+  constructor() {
+    // 首次手勢（點/按/觸）才建立 AudioContext —— 消除非手勢初始化警告
+    if (typeof window === "undefined") return;
+    const unlock = () => {
+      this.unlocked = true;
+      this.ensure();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    window.addEventListener("touchstart", unlock);
+  }
+
+  /** lazy init; 未手勢前不建立 ctx（靜默，無警告） */
   private ensure(): AudioContext | null {
     if (typeof window === "undefined") return null;
+    if (!this.unlocked && !this.ctx) return null;
     if (!this.ctx) {
       const AC: typeof AudioContext | undefined =
         window.AudioContext ??
