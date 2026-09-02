@@ -116,16 +116,38 @@ export function sharePageHtml(s: SharePageState): string {
     font-size:.85rem; color: var(--red); text-shadow: 0 0 12px rgba(255,46,77,.5); }
   .note { margin-top:1.6rem; text-align:center; font-size:.68rem; letter-spacing:.3em;
     color: var(--faint); }
-  .dead { text-align:center; font-family: Rajdhani; font-weight:600; letter-spacing:.35em;
+  .dead { text-align:center; font-family: Rajdhani, sans-serif; font-weight:600; letter-spacing:.35em;
     color: var(--red); text-shadow: 0 0 20px rgba(255,46,77,.4); padding:2rem 0;
     font-size: clamp(1rem,3vw,1.3rem); }
+  /* 背景偽駭客代碼流（與 /code-rain.js 搭配） */
+  #rain {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden;
+    padding: 10vh 8vw 14vh 5vw;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: clamp(8px, .72vw, 11px); line-height: 1.6;
+    color: rgba(168,230,255,.13); text-shadow: 0 0 8px rgba(168,230,255,.14);
+    white-space: pre-wrap; word-break: break-all;
+    pointer-events: none; user-select: none;
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 78%, transparent 100%);
+    mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 78%, transparent 100%);
+  }
+  .panel { position: relative; z-index: 1; }
+  @media (prefers-reduced-motion: reduce) { #rain { display: none; } }
 </style>
 </head>
 <body>
+  <div id="rain" aria-hidden="true"></div>
   <main class="panel">
     <div class="os">NETRUNNER // <b>FILE VAULT</b></div>
     ${body}
   </main>
+  <script src="/code-rain.js"></script>
+  <script>
+    (function () {
+      var el = document.getElementById("rain");
+      if (el && window.startCodeRain) window.startCodeRain(el);
+    })();
+  </script>
 </body>
 </html>`;
 }
