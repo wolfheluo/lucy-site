@@ -208,6 +208,45 @@ export function sharePageHtml(s: SharePageState): string {
     #rain { display: none; }
     .scanbar { animation: none; display: none; }
   }
+  /* 成功：ACCESS GRANTED 解碼 + 讀條 overlay */
+  .grant {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(700px 460px at 50% 42%, rgba(140,205,255,.09), transparent 65%),
+      rgba(4,5,8,.95);
+    font-family: Rajdhani, "Noto Sans TC", sans-serif;
+  }
+  .grant.done { opacity: 0; transition: opacity .25s ease; }
+  .grant-box { text-align: center; width: min(540px, 82vw); }
+  .grant-os {
+    font-size: .72rem; font-weight: 600; letter-spacing: .55em;
+    color: var(--faint); margin-bottom: 1.6rem;
+  }
+  .grant-file {
+    font-weight: 700; font-size: clamp(1.5rem, 4.6vw, 2.4rem);
+    letter-spacing: .22em; color: var(--ice);
+    text-shadow: 0 0 24px rgba(120, 230, 255, .55), 0 0 60px rgba(120,230,255,.2);
+    min-height: 1.4em; white-space: nowrap;
+  }
+  .grant-sub {
+    margin-top: .7rem; font-size: .8rem; letter-spacing: .2em;
+    color: var(--dim); word-break: break-all;
+  }
+  .grant-bar {
+    margin: 2rem auto 0; height: 3px; width: 100%;
+    background: rgba(160,215,255,.12); border-radius: 2px; overflow: hidden;
+  }
+  .grant-bar i {
+    display: block; height: 100%; width: 0;
+    background: linear-gradient(90deg, var(--red), var(--pink), var(--ice));
+    box-shadow: 0 0 16px rgba(255,159,229,.6);
+  }
+  .grant-pct {
+    margin-top: .9rem; font-weight: 600; font-size: .95rem;
+    letter-spacing: .4em; color: var(--ice);
+    text-shadow: 0 0 12px rgba(168,230,255,.5);
+  }
 </style>
 </head>
 <body${deniedClass}>
@@ -222,6 +261,97 @@ export function sharePageHtml(s: SharePageState): string {
     (function () {
       var el = document.getElementById("rain");
       if (el && window.startCodeRain) window.startCodeRain(el);
+    })();
+  </script>
+  <script>
+    /* 成功下載儀式：fetch 驗證 → ACCESS GRANTED 矩陣解碼 + 讀條 → 原生 submit */
+    (function () {
+      var form = document.querySelector("form");
+      if (!form) return;
+      if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      var animating = false;
+      var CHARS = "01<>/\\#$%&@!?";
+
+      form.addEventListener("submit", function (e) {
+        if (animating) return;
+        e.preventDefault();
+        var pin = (document.getElementById("pin") ? document.getElementById("pin").value : "") || "";
+        var url = form.getAttribute("action") || location.pathname;
+
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "pin=" + encodeURIComponent(pin),
+          credentials: "same-origin"
+        }).then(function (res) {
+          if (res.status !== 200) {
+            // 錯 pin / 鎖定 → 載入 server 錯誤頁（含入侵動畫）
+            res.text().then(function (html) {
+              document.open();
+              document.write(html);
+              document.close();
+            });
+            return;
+          }
+          if (res.body && res.body.cancel) res.body.cancel(); // 預載中斷（真正下載由原生 submit 進行）
+          startGrantFx(function () {
+            animating = true;
+            form.submit();
+          });
+        }).catch(function () {
+          form.submit(); // fetch 失敗 → 原生（原始行為）
+        });
+      });
+
+      function startGrantFx(cb) {
+        var ov = document.createElement("div");
+        ov.className = "grant";
+        ov.innerHTML =
+          '<div class="grant-box">' +
+          '<div class="grant-os">FILE VAULT // 驗證通過</div>' +
+          '<div class="grant-file" id="gfile"></div>' +
+          '<div class="grant-sub">' + escapeHtml((document.querySelector(".file-name") || {}).textContent || "") + '</div>' +
+          '<div class="grant-bar"><i id="gbar"></i></div>' +
+          '<div class="grant-pct" id="gpct">000%</div>' +
+          "</div>";
+        document.body.appendChild(ov);
+
+        var TARGET = "ACCESS GRANTED";
+        var gfile = document.getElementById("gfile");
+        var tickN = 0;
+        var TOTAL = 26;
+        var dec = setInterval(function () {
+          tickN++;
+          var fixedN = Math.floor((tickN / TOTAL) * TARGET.length);
+          var s = "";
+          for (var i = 0; i < TARGET.length; i++) {
+            s += i < fixedN ? TARGET[i] : CHARS[Math.floor(Math.random() * CHARS.length)];
+          }
+          gfile.textContent = s;
+          if (tickN >= TOTAL) { clearInterval(dec); gfile.textContent = TARGET; }
+        }, 42);
+
+        var t0 = performance.now();
+        var DUR = 1150;
+        (function tick(now) {
+          var p = Math.min(1, (now - t0) / DUR);
+          var eased = 1 - Math.pow(1 - p, 2.2);
+          document.getElementById("gbar").style.width = (eased * 100) + "%";
+          document.getElementById("gpct").textContent =
+            String(Math.round(eased * 100)).padStart(3, "0") + "%";
+          if (p < 1) { requestAnimationFrame(tick); }
+          else {
+            ov.classList.add("done");
+            setTimeout(cb, 260);
+          }
+        })(t0);
+      }
+
+      function escapeHtml(x) {
+        return String(x).replace(/[&<>"']/g, function (c) {
+          return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+      }
     })();
   </script>
 </body>
