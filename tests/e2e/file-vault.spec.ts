@@ -58,7 +58,7 @@ test.describe("file-vault 關鍵路徑", () => {
     await expect(page.getByText("share-target.bin")).toBeVisible({ timeout: 10_000 });
 
     await page.click('li.vault-file:has-text("share-target.bin") button.vault-action.share');
-    await expect(page.getByText("SHARE LINK ESTABLISHED")).toBeVisible();
+    await expect(page.locator(".vault-modal-title")).toBeVisible();
     const urlText = (await page.locator(".vault-share-url").innerText()).trim();
     const shareUrl = urlText.split("\n")[0].trim();
     const pin = (await page.locator(".vault-pin").innerText()).trim();
@@ -81,7 +81,7 @@ test.describe("file-vault 關鍵路徑", () => {
     // 撤銷分享 → 公開頁 404
     page.once("dialog", (d) => void d.accept());
     await page.click(".vault-modal-foot .vault-action.del");
-    await expect(page.getByText("SHARE LINK ESTABLISHED")).not.toBeVisible();
+    await expect(page.locator(".vault-modal")).not.toBeVisible();
     const gone = await page.request.get(shareUrl);
     expect(gone.status()).toBe(404);
   });

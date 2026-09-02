@@ -1,14 +1,19 @@
 // =====================================================================
-//  VaultUI：檔案保險箱主介面
-//  - dropzone（拖曳/點擊多檔）+ 上傳進度條
-//  - 檔案列表（剩餘壽命即時倒數 / 分享狀態 / 操作）
-//  - 分享 modal（/s/xxx + PIN + curl 一鍵下載）
+//  VaultUI：檔案保險箱主介面（NETRUNNER 沉浸版）
+//  - dropzone（拖曳/點擊多檔）+ XHR 上傳進度條
+//  - 檔案列表：stagger reveal / 新檔 flash / 刪除 exit / 壽命倒數
+//  - 分享 modal：GlitchText 標題 + PIN 逐位 reveal + curl 一鍵下載
+//  - 音效：上傳完成 ping / 失敗 denied / 分享 ping
 // =====================================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { FileListItem, UploadResponse } from "../types";
+import { sfx } from "../../../src/audio/engine";
+import GlitchText from "../../../src/components/GlitchText";
 import { vaultApi } from "./api";
 import { curlCommand, fmtSize, fmtTtl, shareUrl, ttlUrgent } from "./util";
+
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 export default function VaultUI({ onLogout }: { onLogout: () => void }) {
   const [files, setFiles] = useState<FileListItem[]>([]);
@@ -20,13 +25,26 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<FileListItem | null>(null);
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
   const dragDepth = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevIds = useRef<string[] | null>(null);
   const rm = useReducedMotion();
 
   const refresh = useCallback(async () => {
     try {
-      setFiles(await vaultApi.list());
+      const next = await vaultApi.list();
+      setFiles((prev) => {
+        // 偵測「新出現」的檔（上傳完成/他人操作）→ flash
+        const oldIds = prevIds.current ?? prev.map((f) => f.id);
+        const fresh = next.filter((f) => !oldIds.includes(f.id)).map((f) => f.id);
+        if (fresh.length > 0) {
+          setFlashIds(new Set(fresh));
+          window.setTimeout(() => setFlashIds(new Set()), 1400);
+        }
+        prevIds.current = next.map((f) => f.id);
+        return next;
+      });
     } catch {
       /* session 失效由上層處理 */
     } finally {
@@ -55,9 +73,12 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       try {
         const res = await vaultApi.upload(arr, (pct) => setUploading({ pct, names }));
         setUploadResult(res.files);
+        if (res.files.some((r) => r.ok)) sfx.ping();
+        else sfx.denied();
         await refresh();
       } catch (e) {
         setUploadErr((e as Error).message);
+        sfx.denied();
       } finally {
         setUploading(null);
       }
@@ -70,6 +91,7 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
     setBusyId(f.id);
     try {
       await vaultApi.remove(f.id);
+      sfx.click();
       await refresh();
     } finally {
       setBusyId(null);
@@ -83,7 +105,9 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       const updated = { ...f, share };
       setFiles((prev) => prev.map((x) => (x.id === f.id ? updated : x)));
       setShareFor(updated);
+      sfx.ping();
     } catch (e) {
+      sfx.denied();
       alert((e as Error).message);
     } finally {
       setBusyId(null);
@@ -100,7 +124,9 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       <div className="vault-bar">
         <div className="vault-bar-left">
           <span className="vault-status-dot" />
-          <span className="vault-status-text">VAULT ONLINE // {files.length} FILE{files.length === 1 ? "" : "S"}</span>
+          <span className="vault-status-text">
+            VAULT ONLINE // {files.length} FILE{files.length === 1 ? "" : "S"}
+          </span>
         </div>
         <button className="vault-link" onClick={onLogout}>
           [ LOGOUT ]
@@ -108,7 +134,10 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       </div>
 
       {/* ── Dropzone ─────────────────────────────────────────── */}
-      <div
+      <motion.div
+        initial={rm ? false : { opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EASE }}
         className={`vault-drop${dragOver ? " over" : ""}${uploading ? " busy" : ""}`}
         onClick={() => !uploading && inputRef.current?.click()}
         onDragEnter={(e) => {
@@ -144,7 +173,7 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
             e.target.value = "";
           }}
         />
-        <div className="vault-drop-icon">⬇</div>
+        <div className="vault-drop-icon">{uploading ? "⏳" : dragOver ? "⌖" : "⬇"}</div>
         {uploading ? (
           <>
             <div className="vault-drop-title">
@@ -157,11 +186,15 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
           </>
         ) : (
           <>
-            <div className="vault-drop-title">{dragOver ? "RELEASE TO UPLOAD" : "DRAG & DROP FILES"}</div>
-            <div className="vault-drop-sub">拖曳檔案至此，或點擊選取（多檔）// 72h 後自動湮滅</div>
+            <div className="vault-drop-title">
+              {dragOver ? "RELEASE TO UPLOAD" : "DRAG & DROP FILES"}
+            </div>
+            <div className="vault-drop-sub">
+              拖曳檔案至此，或點擊選取（多檔）// 72h 後自動湮滅
+            </div>
           </>
         )}
-      </div>
+      </motion.div>
 
       {/* 上傳結果 / 錯誤 */}
       <AnimatePresence>
@@ -199,72 +232,86 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       {/* ── 檔案列表 ─────────────────────────────────────────── */}
       <div className="vault-list-head">
         <span>STORED FILES</span>
-        <span className="dim">
-          {totalSize > 0 ? `${fmtSize(totalSize)} TOTAL` : ""}
-        </span>
+        <span className="dim">{totalSize > 0 ? `${fmtSize(totalSize)} TOTAL` : ""}</span>
       </div>
 
       {loading ? (
         <div className="vault-empty">SCANNING VAULT…</div>
       ) : files.length === 0 ? (
-        <div className="vault-empty">
+        <motion.div
+          initial={rm ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="vault-empty"
+        >
           <div className="vault-empty-title">VAULT EMPTY</div>
           <div className="vault-empty-sub">保險箱是空的——上傳第一個檔案開始</div>
-        </div>
+        </motion.div>
       ) : (
         <ul className="vault-files">
-          {files.map((f) => {
-            const ttl = Math.max(0, Math.round((f.expireTime - now) / 1000));
-            const urgent = ttlUrgent(ttl);
-            return (
-              <li key={f.id} className="vault-file glass">
-                <div className="vault-file-main">
-                  <div className="vault-file-name" title={f.originalName}>
-                    {f.originalName}
+          <AnimatePresence initial={false}>
+            {files.map((f, i) => {
+              const ttl = Math.max(0, Math.round((f.expireTime - now) / 1000));
+              const urgent = ttlUrgent(ttl);
+              return (
+                <motion.li
+                  key={f.id}
+                  layout={!rm}
+                  initial={rm ? false : { opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={rm ? undefined : { opacity: 0, x: 24 }}
+                  transition={{ duration: 0.32, ease: EASE, delay: Math.min(i * 0.055, 0.5) }}
+                  className={`vault-file glass${
+                    flashIds.has(f.id) ? " new-flash" : ""
+                  }`}
+                >
+                  <div className="vault-file-main">
+                    <div className="vault-file-name" title={f.originalName}>
+                      {f.originalName}
+                    </div>
+                    <div className="vault-file-meta">
+                      <span>{fmtSize(f.size)}</span>
+                      <span className="sep">//</span>
+                      <span className={urgent ? "ttl-urgent" : ""}>
+                        {ttl <= 0 ? "SELF-DESTRUCTED" : `湮滅倒數 ${fmtTtl(ttl)}`}
+                      </span>
+                      {f.share && (
+                        <>
+                          <span className="sep">//</span>
+                          <span className="share-linked">SHARE: /s/{f.share.shareId}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="vault-file-meta">
-                    <span>{fmtSize(f.size)}</span>
-                    <span className="sep">//</span>
-                    <span className={urgent ? "ttl-urgent" : ""}>
-                      {ttl <= 0 ? "SELF-DESTRUCTED" : `湮滅倒數 ${fmtTtl(ttl)}`}
-                    </span>
-                    {f.share && (
-                      <>
-                        <span className="sep">//</span>
-                        <span className="share-linked">SHARE: /s/{f.share.shareId}</span>
-                      </>
+                  <div className="vault-file-actions">
+                    {!f.share && (
+                      <button
+                        className="vault-action share"
+                        disabled={busyId === f.id}
+                        onClick={() => void openShare(f)}
+                      >
+                        SHARE
+                      </button>
                     )}
-                  </div>
-                </div>
-                <div className="vault-file-actions">
-                  {!f.share && (
+                    {f.share && (
+                      <button className="vault-action share" onClick={() => setShareFor(f)}>
+                        LINK
+                      </button>
+                    )}
+                    <a className="vault-action dl" href={vaultApi.downloadUrl(f.id)} data-hover>
+                      GET
+                    </a>
                     <button
-                      className="vault-action share"
+                      className="vault-action del"
                       disabled={busyId === f.id}
-                      onClick={() => void openShare(f)}
+                      onClick={() => void remove(f)}
                     >
-                      SHARE
+                      BURN
                     </button>
-                  )}
-                  {f.share && (
-                    <button className="vault-action share" onClick={() => setShareFor(f)}>
-                      LINK
-                    </button>
-                  )}
-                  <a className="vault-action dl" href={vaultApi.downloadUrl(f.id)} data-hover>
-                    GET
-                  </a>
-                  <button
-                    className="vault-action del"
-                    disabled={busyId === f.id}
-                    onClick={() => void remove(f)}
-                  >
-                    BURN
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+                  </div>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
         </ul>
       )}
 
@@ -273,7 +320,11 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
         {shareFor?.share && (
           <ShareModal
             file={shareFor}
-            onClose={() => setShareFor(null)}
+            rm={rm === true}
+            onClose={() => {
+              sfx.click();
+              setShareFor(null);
+            }}
             onRevoked={async () => {
               await refresh();
               setShareFor(null);
@@ -288,10 +339,12 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
 /* ---------------- ShareModal ---------------- */
 function ShareModal({
   file,
+  rm,
   onClose,
   onRevoked,
 }: {
   file: FileListItem;
+  rm: boolean;
   onClose: () => void;
   onRevoked: () => void;
 }) {
@@ -316,6 +369,7 @@ function ShareModal({
     setRevoking(true);
     try {
       await vaultApi.revoke(file.id);
+      sfx.click();
       await onRevoked();
     } finally {
       setRevoking(false);
@@ -333,23 +387,48 @@ function ShareModal({
       <motion.div
         className="vault-modal glass"
         onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, scale: 0.96, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97 }}
-        transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        initial={rm ? false : { opacity: 0, scale: 0.94, y: 14, filter: "blur(6px)" }}
+        animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+        exit={rm ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.24, ease: EASE }}
       >
-        <div className="vault-modal-title">SHARE LINK ESTABLISHED // 分享已建立</div>
-        <div className="vault-modal-file">{file.originalName}</div>
+        <GlitchText
+          className="vault-modal-title"
+          text="SHARE LINK ESTABLISHED"
+          start
+          hover
+          instant={rm}
+        />
+        <div className="vault-modal-file">
+          檔案 // <span className="vm-file-name">{file.originalName}</span>
+        </div>
 
-        <div className="vault-share-url" onClick={() => void copy(url, "連結")} title="點擊複製連結">
+        <div
+          className="vault-share-url"
+          onClick={() => void copy(url, "連結")}
+          title="點擊複製連結"
+        >
           {url}
           <span className="vault-copy-hint">COPY</span>
         </div>
 
         <div className="vault-pin-row">
           <div className="vault-pin-label">PIN</div>
-          <div className="vault-pin" onClick={() => void copy(share.pin, "PIN")} title="點擊複製 PIN">
-            {share.pin}
+          <div
+            className="vault-pin"
+            onClick={() => void copy(share.pin, "PIN")}
+            title="點擊複製 PIN"
+            aria-label={`PIN ${share.pin}`}
+          >
+            {share.pin.split("").map((ch, i) => (
+              <span
+                key={i}
+                className="pchar"
+                style={{ animationDelay: rm ? undefined : `${0.25 + i * 0.09}s` }}
+              >
+                {ch}
+              </span>
+            ))}
           </div>
         </div>
 

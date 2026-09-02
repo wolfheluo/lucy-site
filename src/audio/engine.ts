@@ -123,6 +123,66 @@ class SoundEngine {
     this.tick(ctx, ctx.currentTime, 0.03);
   }
 
+  /** 存取被拒 buzz — 低頻 saw 下墜 + 雜訊爆音 */
+  denied() {
+    const ctx = this.ensure();
+    if (!ctx || !this.master || this.muted) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.28);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+    osc.connect(g).connect(this.master);
+    osc.start(t);
+    osc.stop(t + 0.35);
+    this.tick(ctx, t, 0.1);
+  }
+
+  /** 授權通過 — 上行雙音（解鎖成功） */
+  granted() {
+    const ctx = this.ensure();
+    if (!ctx || !this.master || this.muted) return;
+    const t = ctx.currentTime;
+    const notes = [523.25, 784, 1046.5]; // C5 G5 C6
+    notes.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      const st = t + i * 0.07;
+      g.gain.setValueAtTime(0.0001, st);
+      g.gain.exponentialRampToValueAtTime(0.12, st + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, st + 0.3);
+      osc.connect(g).connect(this.master!);
+      osc.start(st);
+      osc.stop(st + 0.35);
+    });
+    this.tick(ctx, t + 0.1, 0.04);
+  }
+
+  /** 完成 ping（上傳成功 / 分享建立） */
+  ping() {
+    const ctx = this.ensure();
+    if (!ctx || !this.master || this.muted) return;
+    const t = ctx.currentTime;
+    [880, 1320].forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      const st = t + i * 0.05;
+      g.gain.setValueAtTime(0.0001, st);
+      g.gain.exponentialRampToValueAtTime(0.09, st + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, st + 0.22);
+      osc.connect(g).connect(this.master!);
+      osc.start(st);
+      osc.stop(st + 0.25);
+    });
+  }
+
   private tick(ctx: AudioContext, t: number, vol: number) {
     if (!this.master) return;
     const src = ctx.createBufferSource();
