@@ -135,7 +135,7 @@ export function sharePageHtml(s: SharePageState): string {
   /* 掃描光條（與 file-vault 工具頁 .scanbar 相同效果） */
   .scanbar {
     position: fixed; left: 0; right: 0; top: -34%; height: 34%;
-    z-index: 2; pointer-events: none;
+    z-index: 0; pointer-events: none; /* 在 panel(z1) 之後：被玻璃面板蓋住 */
     background: linear-gradient(180deg, transparent,
       rgba(190,235,255,.05) 48%, rgba(190,235,255,.12) 50%,
       rgba(190,235,255,.05) 52%, transparent);
