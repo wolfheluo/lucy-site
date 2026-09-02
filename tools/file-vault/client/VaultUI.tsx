@@ -443,7 +443,11 @@ function ShareModal({
         </div>
 
         <div className="vault-modal-foot">
-          <button className="vault-action del" disabled={revoking} onClick={() => void revoke()}>
+          <button
+            className="vault-btn vault-btn-danger"
+            disabled={revoking}
+            onClick={() => void revoke()}
+          >
             {revoking ? "REVOKING…" : "REVOKE 撤銷"}
           </button>
           <button className="vault-btn vault-btn-primary" onClick={onClose}>

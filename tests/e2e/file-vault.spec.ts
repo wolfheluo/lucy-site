@@ -80,7 +80,7 @@ test.describe("file-vault 關鍵路徑", () => {
 
     // 撤銷分享 → 公開頁 404
     page.once("dialog", (d) => void d.accept());
-    await page.click(".vault-modal-foot .vault-action.del");
+    await page.click(".vault-modal-foot .vault-btn-danger");
     await expect(page.locator(".vault-modal")).not.toBeVisible();
     const gone = await page.request.get(shareUrl);
     expect(gone.status()).toBe(404);

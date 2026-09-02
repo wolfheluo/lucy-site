@@ -1476,3 +1476,18 @@ a.pcard.clickable:hover { cursor: pointer; }
   .vault-shatter, .vault-respawn-scan { display: none; }
   .vault-lock-panel.gone { opacity: 1; }
 }
+
+/* 分享 modal：REVOKE danger 按鈕（與 CLOSE 同尺寸） */
+.vault-btn-danger {
+  font-family: var(--font-en); font-weight: 700; letter-spacing: 0.3em;
+  font-size: 0.85rem; padding: 0.75em 1.6em; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s;
+  background: rgba(255, 46, 77, 0.07);
+  color: var(--red);
+  border: 1px solid rgba(255, 46, 77, 0.45);
+}
+.vault-btn-danger:hover:not(:disabled) {
+  background: rgba(255, 46, 77, 0.16);
+  box-shadow: 0 0 16px rgba(255, 46, 77, 0.3);
+}
+.vault-btn-danger:disabled { opacity: 0.5; cursor: wait; }
