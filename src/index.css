@@ -1267,3 +1267,144 @@ a.pcard.clickable:hover { cursor: pointer; }
 
 /* 分享 modal 檔名高亮 */
 .vault-modal-file .vm-file-name { color: var(--ice); }
+
+/* ============================================================
+   LockScreen：入侵效果（錯密碼「被竄網使入侵」）
+   ============================================================ */
+.vault-lock-titlewrap { text-align: center; }
+
+/* 亂碼覆寫層（JS 產生字元，蓋在標題上） */
+.vault-lock-titlewrap .hack-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-en); font-weight: 700;
+  font-size: clamp(2.2rem, 6.5vw, 3.6rem);
+  letter-spacing: 0.14em; color: var(--red);
+  text-shadow: 0 0 18px rgba(255, 46, 77, 0.6), 3px 0 rgba(168, 230, 255, 0.5), -3px 0 rgba(255, 159, 229, 0.5);
+  animation: hackShake .09s steps(2) infinite;
+  pointer-events: none;
+}
+@keyframes hackShake {
+  0% { transform: translate(0, 0) skewX(0); }
+  25% { transform: translate(-1.5px, .5px) skewX(-2deg); }
+  50% { transform: translate(1px, -1px); }
+  75% { transform: translate(-.5px, 1px) skewX(1.5deg); }
+  100% { transform: translate(0, 0); }
+}
+
+.vault-lock-titlewrap.hacked .glitch-box { opacity: 0; }
+
+/* RGB 破碎 ghost：::before 紅 copy、::after 冰藍 copy（各自 clip 橫條） */
+.vault-lock-titlewrap.hacked::before,
+.vault-lock-titlewrap.hacked::after {
+  content: attr(data-text);
+  position: absolute; top: 0; left: 0; width: 100%;
+  font-family: var(--font-en); font-weight: 700;
+  font-size: clamp(2.2rem, 6.5vw, 3.6rem);
+  letter-spacing: 0.14em; text-align: center;
+  pointer-events: none; white-space: nowrap;
+}
+.vault-lock-titlewrap.hacked::before {
+  color: var(--red); transform: translateX(-7px);
+  animation: ghostRed .16s steps(2) infinite;
+  clip-path: inset(0 0 58% 0);
+}
+.vault-lock-titlewrap.hacked::after {
+  color: var(--ice); transform: translateX(7px);
+  animation: ghostCyan .13s steps(2) infinite;
+  clip-path: inset(52% 0 0 0);
+}
+@keyframes ghostRed {
+  0% { clip-path: inset(12% 0 40% 0); }
+  25% { clip-path: inset(58% 0 8% 0); }
+  50% { clip-path: inset(30% 0 52% 0); }
+  75% { clip-path: inset(6% 0 72% 0); }
+  100% { clip-path: inset(44% 0 22% 0); }
+}
+@keyframes ghostCyan {
+  0% { clip-path: inset(62% 0 4% 0); }
+  25% { clip-path: inset(20% 0 60% 0); }
+  50% { clip-path: inset(48% 0 30% 0); }
+  75% { clip-path: inset(80% 0 2% 0); }
+  100% { clip-path: inset(34% 0 48% 0); }
+}
+
+/* panel 入侵碎裂：更多段、加 skew、大位移 */
+.vault-lock-panel.hacked {
+  animation: panelHack .5s steps(4) 1;
+  border-color: var(--red);
+  box-shadow: 0 0 40px rgba(255, 46, 77, 0.35);
+}
+@keyframes panelHack {
+  0% { clip-path: inset(0 0 0 0); transform: translate(0) skewX(0); }
+  12% { clip-path: inset(8% 0 46% 0); transform: translate(-9px, 2px) skewX(-3deg); }
+  24% { clip-path: inset(40% 0 12% 0); transform: translate(9px, -3px) skewX(2deg); }
+  36% { clip-path: inset(64% 0 4% 0); transform: translate(-7px, 2px); }
+  48% { clip-path: inset(18% 0 58% 0); transform: translate(7px, -2px) skewX(-2deg); }
+  60% { clip-path: inset(50% 0 20% 0); transform: translate(-5px, 1px) skewX(3deg); }
+  72% { clip-path: inset(4% 0 74% 0); transform: translate(5px, -1px); }
+  84% { clip-path: inset(28% 0 34% 0); transform: translate(-3px, 1px) skewX(-1deg); }
+  100% { clip-path: inset(0 0 0 0); transform: translate(0) skewX(0); }
+}
+
+/* 入侵警示 line */
+.vault-intruder {
+  display: flex; align-items: center; justify-content: center; gap: .6em;
+  margin: 0 0 1rem; padding: .45rem .8rem;
+  font-family: var(--font-en); font-size: .78rem; font-weight: 600;
+  letter-spacing: .3em; color: var(--red);
+  background: rgba(255, 46, 77, 0.08);
+  border: 1px solid rgba(255, 46, 77, 0.45);
+  border-radius: 6px;
+  animation: intruderBlink .5s steps(2) infinite;
+}
+.vault-intruder .warn-tri { animation: warnSpin 1s linear infinite; display: inline-block; }
+@keyframes warnSpin { to { transform: rotate(360deg); } }
+@keyframes intruderBlink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 14px rgba(255,46,77,.25); }
+  50% { opacity: .55; box-shadow: 0 0 4px rgba(255,46,77,.1); }
+}
+
+/* 整頁紅 flash（入侵瞬間） */
+.vault-intruder-flash {
+  position: fixed; inset: 0; z-index: 60; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgba(255, 46, 77, 0.28) 100%);
+  animation: intruderFlash .9s ease-out 1;
+}
+@keyframes intruderFlash {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  35% { opacity: .25; }
+  55% { opacity: .7; }
+  100% { opacity: 0; }
+}
+
+/* 碎屑掉落（3 片） */
+.vault-shard {
+  position: absolute; top: 96px; width: 7px; height: 7px; pointer-events: none;
+  background: var(--red); opacity: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.vault-shard.s2 { top: 148px; }
+.vault-shard.s3 { top: 64px; }
+.vault-lock-panel.hacked .vault-shard {
+  animation: shardFall .7s cubic-bezier(.2, .6, .3, 1) 1 forwards;
+}
+.vault-shard.s2 { background: var(--ice); width: 5px; height: 5px; animation-delay: .08s; left: 62% !important; }
+.vault-shard.s3 { background: var(--pink); width: 6px; height: 6px; animation-delay: .16s; left: 20% !important; }
+@keyframes shardFall {
+  0% { opacity: 1; transform: translateY(0) rotate(0); }
+  100% { opacity: 0; transform: translateY(90px) rotate(340deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-lock-titlewrap .hack-overlay,
+  .vault-lock-titlewrap.hacked::before,
+  .vault-lock-titlewrap.hacked::after,
+  .vault-lock-panel.hacked,
+  .vault-intruder,
+  .vault-intruder-flash,
+  .vault-lock-panel.hacked .vault-shard {
+    animation: none !important;
+  }
+  .vault-intruder { animation: none; }
+}
