@@ -1408,3 +1408,22 @@ a.pcard.clickable:hover { cursor: pointer; }
   }
   .vault-intruder { animation: none; }
 }
+
+/* ---------- HackerCodeRain 背景（偽駭客代碼流） ---------- */
+.hack-rain {
+  position: fixed; inset: 0; z-index: 2;
+  overflow: hidden; padding: 13vh 10vw 16vh 6vw;
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  font-size: clamp(8px, .74vw, 11.5px);
+  line-height: 1.6;
+  color: rgba(168, 230, 255, 0.16);
+  text-shadow: 0 0 8px rgba(168, 230, 255, 0.2);
+  white-space: pre-wrap; word-break: break-all;
+  pointer-events: none; user-select: none;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 9%, #000 76%, transparent 100%);
+  opacity: .85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hack-rain { display: none; }
+}

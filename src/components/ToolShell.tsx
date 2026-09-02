@@ -9,6 +9,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import { CLIENT_TOOLS } from "../tools";
 import { profile } from "../content";
+import HackerCodeRain from "./HackerCodeRain";
 
 function hexTicker(): string {
   const bytes = Array.from({ length: 4 }, () =>
@@ -66,6 +67,9 @@ export default function ToolShell() {
         <div className="vignette" />
         <div className="noise" />
       </div>
+
+      {/* 偽駭客代碼流背景 */}
+      <HackerCodeRain />
 
       {/* 四角 HUD frame */}
       <span className="tool-hud-corner tl" aria-hidden="true" />
