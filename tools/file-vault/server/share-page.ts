@@ -132,11 +132,31 @@ export function sharePageHtml(s: SharePageState): string {
     mask-image: linear-gradient(180deg, transparent 0, #000 10%, #000 78%, transparent 100%);
   }
   .panel { position: relative; z-index: 1; }
-  @media (prefers-reduced-motion: reduce) { #rain { display: none; } }
+  /* 上下往返光條（CRT 掃描光束） */
+  .scanbeam {
+    position: fixed; left: 0; right: 0; height: 130px; z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(180deg,
+      transparent,
+      rgba(168,230,255,.05) 38%,
+      rgba(168,230,255,.14) 50%,
+      rgba(168,230,255,.05) 62%,
+      transparent);
+    animation: beamPingPong 7s ease-in-out infinite alternate;
+  }
+  @keyframes beamPingPong {
+    from { top: -22%; }
+    to { top: calc(100% - 90px); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #rain { display: none; }
+    .scanbeam { animation: none; display: none; }
+  }
 </style>
 </head>
 <body>
   <div id="rain" aria-hidden="true"></div>
+  <div class="scanbeam" aria-hidden="true"></div>
   <main class="panel">
     <div class="os">NETRUNNER // <b>FILE VAULT</b></div>
     ${body}
