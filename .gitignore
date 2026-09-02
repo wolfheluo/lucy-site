@@ -25,3 +25,7 @@ dist-ssr
 
 # local preview screenshots
 preview-*.png
+
+# runtime data (SQLite / uploaded files)
+data
+dist-server

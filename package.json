@@ -4,28 +4,42 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "concurrently -k -n WEB,API -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
+    "dev:web": "vite",
+    "dev:api": "tsx watch server/index.ts",
+    "build": "tsc -b && vite build && tsc -p tsconfig.server.json",
+    "start": "node dist-server/server/index.js",
+    "preview": "vite preview",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "test": "vitest run",
+    "typecheck:app": "tsc -b",
+    "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@react-three/postprocessing": "^3.1.1",
     "@types/three": "^0.185.4",
+    "better-sqlite3": "^13.0.3",
     "framer-motion": "^13.1.1",
+    "hono": "^4.13.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-router": "^7.18.3",
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "concurrently": "^10.0.5",
     "oxlint": "^1.79.0",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }

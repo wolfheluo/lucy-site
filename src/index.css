@@ -737,3 +737,106 @@ html.cursor-none * { cursor: none !important; }
   .toggles { right: 1rem; bottom: 1rem; }
   .hero-scroll { left: 1.4rem; }
 }
+
+/* ============================================================
+   TOOL SHELL（工具頁精簡 chrome）
+   ============================================================ */
+.tool-shell {
+  min-height: 100vh;
+  position: relative;
+  background:
+    radial-gradient(900px 600px at 80% 10%, rgba(140, 205, 255, 0.06), transparent 60%),
+    radial-gradient(700px 500px at 10% 90%, rgba(255, 159, 229, 0.05), transparent 55%),
+    var(--bg);
+  color: var(--text);
+}
+.tool-fx { z-index: 5; }
+
+.tool-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 2.2rem;
+  background: rgba(7, 7, 11, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.tool-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
+  font-family: var(--font-en);
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  font-size: 0.85rem;
+  color: var(--dim);
+  transition: color 0.25s;
+}
+.tool-back:hover { color: var(--ice); }
+.tool-back-arrow { color: var(--red); font-size: 1rem; line-height: 1; }
+
+.tool-title {
+  font-family: var(--font-en);
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  font-size: 0.95rem;
+  color: var(--cold);
+  text-shadow: 0 0 12px rgba(168, 230, 255, 0.35);
+}
+.tool-title .zh {
+  font-family: var(--font-zh);
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--dim);
+  letter-spacing: 0.4em;
+  margin-left: 0.9em;
+}
+
+.tool-body {
+  position: relative;
+  z-index: 10;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 6vw 8vh;
+}
+.tool-loading {
+  font-family: var(--font-en);
+  letter-spacing: 0.4em;
+  color: var(--faint);
+  animation: scrollPulse 1.6s infinite;
+}
+
+/* 可點擊作品卡 */
+a.pcard.clickable { display: block; text-decoration: none; }
+a.pcard.clickable:hover { cursor: pointer; }
+
+/* file-vault P1 佔位 */
+.vault-placeholder {
+  text-align: center;
+}
+.vault-placeholder-title {
+  font-family: var(--font-en);
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 4rem);
+  letter-spacing: 0.3em;
+  color: var(--cold);
+  text-shadow: 0 0 22px rgba(168, 230, 255, 0.4);
+}
+.vault-placeholder-sub {
+  margin-top: 1.4rem;
+  font-family: var(--font-en);
+  letter-spacing: 0.5em;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .tool-top { padding: 0.9rem 1.2rem; }
+  .tool-body { padding: 3vh 1.2rem 6vh; align-items: flex-start; }
+}

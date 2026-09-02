@@ -2,9 +2,11 @@
 //  頁面段落：Hero / About / Skills / Projects / Contact
 // =====================================================================
 import { motion, useReducedMotion } from "framer-motion";
+import { Link } from "react-router";
 import type { ReactNode } from "react";
 import GlitchText from "./GlitchText";
 import { about, contact, profile, projects, skills } from "../content";
+import { toolProjectCards } from "../tools";
 
 /* 捲入視野時淡入上移（respect reduced-motion） */
 function FadeIn({
@@ -165,7 +167,51 @@ export function SkillsSec({ instant }: { instant: boolean }) {
 }
 
 /* ---------------- Projects ---------------- */
+type ProjectCardData = {
+  idx: string;
+  title: string;
+  zh: string;
+  desc: string;
+  tags: string[];
+  href?: string;
+};
+
+function ProjectCard({ p }: { p: ProjectCardData }) {
+  const inner = (
+    <>
+      <div className="p-idx">{p.idx}</div>
+      <h3 className="p-title">
+        {p.title}
+        <span className="zh">{p.zh}</span>
+      </h3>
+      <p className="p-desc">{p.desc}</p>
+      <div className="p-tags">
+        {p.tags.map((t) => (
+          <span className="tag" key={t}>
+            {t}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+
+  if (p.href) {
+    return (
+      <Link className="pcard glass clickable" to={p.href} data-hover>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <article className="pcard glass" data-hover>
+      {inner}
+    </article>
+  );
+}
+
 export function ProjectsSec({ instant }: { instant: boolean }) {
+  const manual: ProjectCardData[] = projects.items.map((p) => ({ ...p, href: undefined }));
+  const cards: ProjectCardData[] = [...manual, ...toolProjectCards(projects.items.length)];
   return (
     <section id="projects" className="sec sec-right">
       <div className="sec-inner">
@@ -173,23 +219,9 @@ export function ProjectsSec({ instant }: { instant: boolean }) {
           <SectionHead en={projects.headingEn} zh={projects.headingZh} instant={instant} />
         </FadeIn>
         <div className="cards">
-          {projects.items.map((p, i) => (
+          {cards.map((p, i) => (
             <FadeIn key={p.idx} delay={0.1 + i * 0.12}>
-              <article className="pcard glass" data-hover>
-                <div className="p-idx">{p.idx}</div>
-                <h3 className="p-title">
-                  {p.title}
-                  <span className="zh">{p.zh}</span>
-                </h3>
-                <p className="p-desc">{p.desc}</p>
-                <div className="p-tags">
-                  {p.tags.map((t) => (
-                    <span className="tag" key={t}>
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </article>
+              <ProjectCard p={p} />
             </FadeIn>
           ))}
         </div>
