@@ -1,12 +1,13 @@
 // =====================================================================
-//  LockScreen：ACCESS DENIED 鎖定畫面（NETRUNNER 三幕儀式）
+//  LockScreen：ACCESS DENIED 鎖定畫面（NETRUNNER 三幕儀式 + 破碎重生）
 //  幕 1  進場：terminal 逐行「建立安全連線」→ ICE 牆偵測
 //  幕 2  標題：ACCESS DENIED 亂碼解碼 + glitch burst
-//  幕 3  錯密碼 →「入侵反應」：標題被亂碼覆寫、RGB 破碎 ghost、
-//          panel 碎裂抖動、碎屑掉落、紅 flash、INTRUDER DETECTED 警示
-//         解鎖成功 → 碎裂退場（exit 動畫）+ granted 上行音
+//  錯密碼 →「入侵反應」：亂碼覆寫 + 紅 flash + INTRUDER 警示
+//          → 整面 panel 炸碎（clip-path 撕裂 + 碎片噴發）
+//          → ~1s 後掃描重生（新 panel clip 展開 + 幕 1 重播）
+//  解鎖成功 → 碎裂退場 + granted 上行音
 // =====================================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import GlitchText from "../../../src/components/GlitchText";
 import { sfx } from "../../../src/audio/engine";
@@ -27,28 +28,64 @@ type LockState =
   | { kind: "error"; message: string }
   | { kind: "locked"; retryAfterSec: number };
 
+interface Shard {
+  x: number; // %
+  y: number; // %
+  w: number; // px
+  h: number;
+  dx: number;
+  dy: number;
+  rot: number;
+  delay: number;
+  hot: boolean;
+}
+
+function generateShards(n = 16): Shard[] {
+  const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+  const dir = (a: number, b: number) => (Math.random() > 0.5 ? 1 : -1) * rnd(a, b);
+  return Array.from({ length: n }, () => ({
+    x: rnd(8, 88),
+    y: rnd(12, 86),
+    w: rnd(10, 26),
+    h: rnd(7, 18),
+    dx: dir(70, 200),
+    dy: dir(60, 220),
+    rot: dir(160, 480),
+    delay: rnd(0, 0.06),
+    hot: Math.random() < 0.25,
+  }));
+}
+
 export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
   const [pw, setPw] = useState("");
   const [state, setState] = useState<LockState>({ kind: "idle" });
   const [lineCount, setLineCount] = useState(0);
   const [titleStart, setTitleStart] = useState(false);
-  const [burstTick, setBurstTick] = useState(0); // 標題 RGB burst 觸發
-  const [hacking, setHacking] = useState(false); // 入侵碎裂中
-  const [hackText, setHackText] = useState<string | null>(null); // 亂碼覆寫
+  const [burstTick, setBurstTick] = useState(0);
+  const [hacking, setHacking] = useState(false);
+  const [hackText, setHackText] = useState<string | null>(null);
   const [redFlash, setRedFlash] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [gen, setGen] = useState(0); // panel 世代（重生 +1）
+  const [breaking, setBreaking] = useState(false); // 破碎階段
+  const [shards, setShards] = useState<Shard[]>([]);
   const rm = useReducedMotion();
   const inputRef = useRef<HTMLInputElement>(null);
+  const leavingRef = useRef(false);
+  const breakingRef = useRef(false);
 
-  // 幕 1：terminal 逐行（每 430ms 一行，完成後開始幕 2）
+  // 幕 1：terminal 逐行（gen 改變 = 初始或重生 → 重播）
   useEffect(() => {
+    if (leavingRef.current) return;
     if (rm === true) {
       setLineCount(BOOT_LINES.length);
       setTitleStart(true);
       setBurstTick(1);
       return;
     }
+    setTitleStart(false);
+    setBurstTick(0);
     sfx.line();
     let n = 1;
     setLineCount(1);
@@ -59,6 +96,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
       if (n >= BOOT_LINES.length) {
         clearInterval(t);
         window.setTimeout(() => {
+          if (leavingRef.current) return;
           setTitleStart(true);
           setBurstTick(1);
           sfx.decode();
@@ -66,7 +104,7 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
       }
     }, 430);
     return () => clearInterval(t);
-  }, [rm]);
+  }, [gen, rm]);
 
   // 鎖定倒數
   useEffect(() => {
@@ -85,13 +123,28 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
     return () => clearInterval(t);
   }, [state]);
 
-  /**
-   * 入侵反應：標題被亂碼覆寫 → RGB 破碎 ghost → panel 碎裂 + 碎屑 + 紅 flash
-   * （reduced-motion 下直接顯示錯誤，不動畫）
-   */
+  /** 破碎階段：inner exit 動畫播放 + 碎片噴發 */
+  const breakPanel = () => {
+    if (breakingRef.current || leavingRef.current) return;
+    breakingRef.current = true;
+    setHacking(false);
+    setShards(generateShards());
+    setBreaking(true);
+  };
+
+  /** 破碎 exit 完成 → 重生（新世代） */
+  const onBrokenDone = () => {
+    if (leavingRef.current) return;
+    breakingRef.current = false;
+    setBreaking(false);
+    setGen((g) => g + 1);
+    window.setTimeout(() => inputRef.current?.focus(), 900);
+  };
+
+  /** 錯密碼：入侵（短版）→ 破碎排程 */
   const runIntrusion = () => {
     sfx.denied();
-    if (rm === true) return;
+    if (rm === true) return; // reduced-motion：直接顯示錯誤，不破碎
     setHacking(true);
     setRedFlash(true);
     let n = 0;
@@ -102,39 +155,34 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
         s += ch === " " ? " " : HACK_CHARS[Math.floor(Math.random() * HACK_CHARS.length)];
       }
       setHackText(s);
-      if (n >= 7) {
+      if (n >= 5) {
         window.clearInterval(t);
         setHackText(null);
-        window.setTimeout(() => {
-          setHacking(false);
-          setRedFlash(false);
-        }, 950);
+        window.setTimeout(breakPanel, 400);
       }
     }, 65);
   };
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (state.kind === "busy" || state.kind === "locked" || leaving) return;
+    if (state.kind === "busy" || state.kind === "locked" || leaving || breaking) return;
     setState({ kind: "busy" });
     try {
       await vaultApi.login(pw);
       sfx.granted();
+      leavingRef.current = true;
       setLeaving(true);
-      // 碎裂退場完成後才揭露 vault
       window.setTimeout(onUnlocked, rm === true ? 0 : 640);
     } catch (err) {
       const e2 = err as Error & { status?: number };
       if (e2.status === 429) {
         const sec = Number(/(\d+)/.exec(e2.message)?.[1] ?? 60);
         setState({ kind: "locked", retryAfterSec: Math.max(1, sec) });
-        runIntrusion();
       } else {
         setState({ kind: "error", message: "ACCESS DENIED // 密碼錯誤" });
-        runIntrusion();
       }
       setPw("");
-      inputRef.current?.focus();
+      runIntrusion();
     }
   };
 
@@ -147,38 +195,77 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
         ? `CONNECTION LOCKED // ${countdown}s`
         : "RESTRICTED AREA // 僅限管理員";
 
+  const shattered = breaking && !rm;
+
   return (
     <div className="vault-lock">
-      {/* 入侵紅 flash（整頁） */}
       {redFlash && <div className="vault-intruder-flash" aria-hidden="true" />}
 
       <div
         className={`vault-lock-panel glass${hacking ? " hacked" : ""}${
-          locked ? " locked" : ""
+          breaking ? " gone" : ""
         }`}
       >
-        {/* 入侵碎屑 */}
-        <span className="vault-shard s1" style={{ left: "38%" }} aria-hidden="true" />
-        <span className="vault-shard s2" aria-hidden="true" />
-        <span className="vault-shard s3" aria-hidden="true" />
+        {/* 碎片噴發層 */}
+        {shattered && (
+          <div className="vault-shatter" aria-hidden="true">
+            {shards.map((s, i) => (
+              <span
+                key={i}
+                className={`sh${s.hot ? " hot" : ""}`}
+                style={
+                  {
+                    left: `${s.x}%`,
+                    top: `${s.y}%`,
+                    width: `${s.w}px`,
+                    height: `${s.h}px`,
+                    "--dx": `${s.dx}px`,
+                    "--dy": `${s.dy}px`,
+                    "--rot": `${s.rot}deg`,
+                    animationDelay: `${s.delay}s`,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </div>
+        )}
 
-        <AnimatePresence mode="wait">
-          {!leaving ? (
+        {/* 重生掃描線 */}
+        {gen > 0 && !breaking && !leaving && !rm && (
+          <div key={`scan-${gen}`} className="vault-respawn-scan" aria-hidden="true" />
+        )}
+
+        <AnimatePresence mode="wait" onExitComplete={onBrokenDone}>
+          {!leaving && !breaking ? (
             <motion.div
-              key="inner"
+              key={`inner-${gen}`}
+              initial={
+                rm === true
+                  ? false
+                  : gen === 0
+                    ? { opacity: 0, y: 12 }
+                    : { opacity: 0, clipPath: "inset(0 0 100% 0)" } // 重生：由下往上展開
+              }
+              animate={{ opacity: 1, y: 0, clipPath: "inset(0 0 0% 0)" }}
               exit={
                 rm === true
-                  ? { opacity: 0 }
+                  ? undefined
                   : {
                       clipPath: [
                         "inset(0 0 0 0)",
-                        "inset(6% 0 44% 0)",
-                        "inset(0 0 0 0)",
-                        "inset(48% 0 5% 0)",
+                        "inset(10% 0 42% 0)",
+                        "inset(55% 4% 8% 0)",
+                        "inset(12% 0 60% 2%)",
                         "inset(0 0 100% 0)",
                       ],
-                      opacity: [1, 1, 0.6, 1, 0],
-                      transition: { duration: 0.55, times: [0, 0.25, 0.45, 0.65, 1] },
+                      rotate: [0, -1.6, 1.2, -0.8, 2.2],
+                      scale: [1, 1.02, 1.04, 1.06, 1.12],
+                      opacity: [1, 1, 0.85, 0.65, 0],
+                      transition: {
+                        duration: 0.55,
+                        times: [0, 0.25, 0.45, 0.68, 1],
+                        ease: "easeIn",
+                      },
                     }
               }
             >
@@ -187,7 +274,6 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
                 <span className="vault-lock-os">NETRUNNER OS // SECURE CHANNEL</span>
               </div>
 
-              {/* 入侵警示 */}
               {hacking && (
                 <div className="vault-intruder" role="alert">
                   <span className="warn-tri">▲</span>
@@ -195,7 +281,6 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
                 </div>
               )}
 
-              {/* 幕 1：terminal 逐行 */}
               <div className="vault-lock-term" aria-hidden="true">
                 {BOOT_LINES.slice(0, lineCount).map((l) => (
                   <div key={l.t} className={l.ok ? "ok" : "bad"}>
@@ -205,7 +290,6 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
                 {lineCount < BOOT_LINES.length && <span className="vault-term-cursor" />}
               </div>
 
-              {/* 幕 2：ACCESS DENIED 標題（hacked 時亂碼覆寫 + RGB ghost 破碎） */}
               <div
                 className={`vault-lock-titlewrap${burstTick > 0 ? " burst" : ""}${
                   hacking ? " hacked" : ""
