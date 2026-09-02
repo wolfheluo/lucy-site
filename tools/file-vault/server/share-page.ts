@@ -29,6 +29,7 @@ export function fmtSize(n: number): string {
 }
 
 export function sharePageHtml(s: SharePageState): string {
+  const deniedClass = s.shareId && (s.error || s.lockedSec) ? ' class="denied"' : '';
   const title = s.shareId ? "FILE VAULT // 檔案保險箱" : "404 // 連結失效";
   const errLine = s.lockedSec
     ? `嘗試次數過多，已鎖定 ${s.lockedSec} 秒`
@@ -112,8 +113,66 @@ export function sharePageHtml(s: SharePageState): string {
     border:0; border-radius:8px; padding:.85rem; cursor:pointer; transition: filter .2s;
   }
   button:hover { filter: brightness(1.15); }
-  .err { margin-top:1.1rem; text-align:center; font-family: Rajdhani; letter-spacing:.25em;
-    font-size:.85rem; color: var(--red); text-shadow: 0 0 12px rgba(255,46,77,.5); }
+  .err {
+    margin-top:1.1rem; text-align:center; font-family: Rajdhani; letter-spacing:.25em;
+    font-size:.85rem; color: var(--red); text-shadow: 0 0 12px rgba(255,46,77,.5);
+    animation: errIn .4s steps(2) 1;
+  }
+  @keyframes errIn {
+    0% { opacity:0; transform: translateX(-10px) skewX(-10deg); filter: blur(2px); }
+    30% { opacity:1; text-shadow: 4px 0 var(--ice), -4px 0 var(--pink), 0 0 18px rgba(255,46,77,.9); }
+    60% { transform: translateX(4px) skewX(4deg); }
+    80% { text-shadow: -3px 0 var(--ice), 3px 0 var(--pink); }
+    100% { transform: none; }
+  }
+  /* 錯 PIN「入侵反應」（body.denied，載入播放一次） */
+  body.denied::after {
+    content: ""; position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 42%, rgba(255,46,77,.26) 100%);
+    animation: denyFlash .9s ease-out 1;
+  }
+  @keyframes denyFlash {
+    0% { opacity: 0; } 12% { opacity: 1; }
+    38% { opacity: .2; } 62% { opacity: .6; } 100% { opacity: 0; }
+  }
+  body.denied .panel {
+    animation: panelRip .55s steps(3) 1;
+    border-color: rgba(255,46,77,.65);
+    box-shadow: 0 0 46px rgba(255,46,77,.28), 0 18px 50px rgba(0,0,0,.5);
+  }
+  @keyframes panelRip {
+    0% { clip-path: inset(0 0 0 0); transform: translate(0) skewX(0); }
+    15% { clip-path: inset(6% 0 48% 0); transform: translate(-9px, 2px) skewX(-2.5deg); }
+    30% { clip-path: inset(42% 0 10% 0); transform: translate(9px, -2px) skewX(2deg); }
+    45% { clip-path: inset(66% 0 3% 0); transform: translate(-7px, 2px); }
+    60% { clip-path: inset(18% 0 56% 0); transform: translate(6px, -1px) skewX(-1.5deg); }
+    75% { clip-path: inset(50% 0 22% 0); transform: translate(-4px, 1px) skewX(1.5deg); }
+    90% { clip-path: inset(3% 0 70% 0); transform: translate(3px, 0); }
+    100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+  }
+  body.denied .file-name {
+    animation: textRip .5s steps(2) 2;
+  }
+  @keyframes textRip {
+    0%, 100% { text-shadow: 0 0 18px rgba(168,230,255,.35); transform: none; }
+    25% { text-shadow: 4px 0 var(--ice), -4px 0 var(--pink), 0 0 30px rgba(255,46,77,.8); transform: translate(-2px, 1px); }
+    50% { text-shadow: -4px 0 var(--ice), 4px 0 var(--red); transform: translate(2px, -1px); }
+    75% { text-shadow: 3px 0 var(--pink), -3px 0 var(--ice); transform: translate(-1px, 0); }
+  }
+  body.denied input {
+    border-color: rgba(255,46,77,.7);
+    box-shadow: 0 0 22px rgba(255,46,77,.35);
+    animation: denyPulse .7s steps(2) 2;
+  }
+  @keyframes denyPulse {
+    0%, 100% { border-color: rgba(255,46,77,.7); box-shadow: 0 0 22px rgba(255,46,77,.35); }
+    50% { border-color: rgba(255,46,77,1); box-shadow: 0 0 40px rgba(255,46,77,.6); }
+  }
+  body.denied .err { color: #ff8094; }
+  @media (prefers-reduced-motion: reduce) {
+    body.denied::after, body.denied .panel, body.denied .file-name,
+    body.denied input, .err { animation: none !important; }
+  }
   .note { margin-top:1.6rem; text-align:center; font-size:.68rem; letter-spacing:.3em;
     color: var(--faint); }
   .dead { text-align:center; font-family: Rajdhani, sans-serif; font-weight:600; letter-spacing:.35em;
@@ -151,7 +210,7 @@ export function sharePageHtml(s: SharePageState): string {
   }
 </style>
 </head>
-<body>
+<body${deniedClass}>
   <div id="rain" aria-hidden="true"></div>
   <div class="scanbar" aria-hidden="true"></div>
   <main class="panel">
