@@ -840,3 +840,249 @@ a.pcard.clickable:hover { cursor: pointer; }
   .tool-top { padding: 0.9rem 1.2rem; }
   .tool-body { padding: 3vh 1.2rem 6vh; align-items: flex-start; }
 }
+
+/* ============================================================
+   FILE VAULT（P-04 工具）—— 鎖定畫面 / 保險箱 UI
+   ============================================================ */
+.vault { width: min(860px, 100%); margin: 0 auto; }
+
+/* ---------- 頂列 ---------- */
+.vault-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.2rem; font-family: var(--font-en);
+}
+.vault-bar-left { display: flex; align-items: center; gap: 0.6em; }
+.vault-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ice);
+  box-shadow: 0 0 10px var(--ice); animation: scrollPulse 2s infinite;
+}
+.vault-status-text { letter-spacing: 0.3em; font-size: 0.8rem; color: var(--ice); }
+.vault-link {
+  background: none; border: none; cursor: pointer; color: var(--faint);
+  font-family: var(--font-en); letter-spacing: 0.3em; font-size: 0.75rem;
+  transition: color 0.25s;
+}
+.vault-link:hover { color: var(--red); }
+
+/* ---------- dropzone ---------- */
+.vault-drop {
+  border: 1px dashed rgba(160, 215, 255, 0.3);
+  border-radius: 14px; padding: 2.2rem 1.4rem; text-align: center;
+  cursor: pointer; transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+  background: rgba(160, 215, 255, 0.03);
+  outline: none;
+}
+.vault-drop:hover, .vault-drop:focus-visible { border-color: var(--ice-deep); }
+.vault-drop.over {
+  border-color: var(--pink); background: rgba(255, 159, 229, 0.06);
+  box-shadow: 0 0 30px rgba(255, 159, 229, 0.15), inset 0 0 30px rgba(255, 159, 229, 0.05);
+}
+.vault-drop.busy { cursor: progress; }
+.vault-drop-icon { font-size: 1.6rem; color: var(--ice-deep); margin-bottom: 0.5rem; }
+.vault-drop-title {
+  font-family: var(--font-en); font-weight: 600; letter-spacing: 0.35em;
+  font-size: 1.05rem; color: var(--cold);
+}
+.vault-drop.over .vault-drop-title { color: var(--pink); text-shadow: 0 0 14px rgba(255,159,229,.5); }
+.vault-drop-sub { margin-top: 0.6rem; font-size: 0.82rem; color: var(--dim); letter-spacing: 0.1em; }
+.vault-drop-pct {
+  font-family: var(--font-en); font-weight: 600; font-size: 0.9rem;
+  color: var(--ice); letter-spacing: 0.3em; margin-top: 0.7rem;
+}
+.vault-upload-progress {
+  margin: 1.1rem auto 0; width: min(420px, 80%); height: 3px;
+  background: rgba(160, 215, 255, 0.12); border-radius: 2px; overflow: hidden;
+}
+.vault-upload-progress i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--pink), var(--ice));
+  box-shadow: 0 0 14px rgba(255, 159, 229, 0.6);
+  transition: width 0.15s linear;
+}
+
+/* ---------- 訊息列 ---------- */
+.vault-msg {
+  margin-top: 0.9rem; padding: 0.7rem 1.1rem; border-radius: 8px;
+  font-size: 0.85rem; letter-spacing: 0.06em; cursor: pointer;
+  border: 1px solid; font-family: var(--font-en);
+}
+.vault-msg.ok { color: var(--ice); border-color: rgba(168, 230, 255, 0.3); background: rgba(168, 230, 255, 0.06); }
+.vault-msg.err { color: var(--red); border-color: rgba(255, 46, 77, 0.4); background: rgba(255, 46, 77, 0.07); }
+
+/* ---------- 列表 ---------- */
+.vault-list-head {
+  display: flex; justify-content: space-between; margin: 1.6rem 0 0.7rem;
+  font-family: var(--font-en); font-size: 0.72rem; letter-spacing: 0.4em;
+  color: var(--faint);
+}
+.vault-list-head .dim { color: var(--faint); }
+.vault-files { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.vault-file {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; padding: 1rem 1.2rem;
+}
+.vault-file-main { min-width: 0; }
+.vault-file-name {
+  font-size: 1rem; color: var(--cold); letter-spacing: 0.03em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46ch;
+}
+.vault-file-meta {
+  margin-top: 0.35rem; font-family: var(--font-en); font-size: 0.72rem;
+  letter-spacing: 0.18em; color: var(--dim); display: flex; gap: 0.6em; flex-wrap: wrap;
+}
+.vault-file-meta .sep { color: var(--faint); }
+.vault-file-meta .ttl-urgent { color: var(--red); text-shadow: 0 0 8px rgba(255,46,77,.4); }
+.vault-file-meta .share-linked { color: var(--pink); }
+.vault-file-actions { display: flex; gap: 0.45rem; flex-shrink: 0; }
+.vault-action {
+  font-family: var(--font-en); font-weight: 600; letter-spacing: 0.18em;
+  font-size: 0.7rem; padding: 0.45em 0.9em; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); color: var(--text);
+  background: rgba(12, 16, 24, 0.6); transition: all 0.22s; text-decoration: none;
+}
+.vault-action:hover:not(:disabled) { color: #fff; }
+.vault-action:disabled { opacity: 0.4; cursor: wait; }
+.vault-action.share:hover { border-color: var(--pink); box-shadow: 0 0 12px rgba(255, 159, 229, 0.25); }
+.vault-action.dl:hover { border-color: var(--ice); box-shadow: 0 0 12px rgba(168, 230, 255, 0.25); }
+.vault-action.del:hover { border-color: var(--red); box-shadow: 0 0 12px rgba(255, 46, 77, 0.3); color: var(--red); }
+
+.vault-empty { text-align: center; padding: 3rem 1rem; border: 1px solid var(--line); border-radius: 14px; }
+.vault-empty-title {
+  font-family: var(--font-en); font-weight: 600; font-size: 1.2rem;
+  letter-spacing: 0.4em; color: var(--faint);
+}
+.vault-empty-sub { margin-top: 0.7rem; font-size: 0.85rem; color: var(--faint); }
+
+/* ---------- 通用按鈕 ---------- */
+.vault-btn {
+  font-family: var(--font-en); font-weight: 700; letter-spacing: 0.3em;
+  font-size: 0.85rem; padding: 0.75em 1.6em; border-radius: 8px; border: 0;
+  cursor: pointer; transition: filter 0.2s; color: #07070b;
+}
+.vault-btn-primary {
+  background: linear-gradient(90deg, var(--ice-deep), var(--ice));
+  text-shadow: none;
+}
+.vault-btn-primary:hover:not(:disabled) { filter: brightness(1.15); }
+.vault-btn:disabled { opacity: 0.5; cursor: wait; }
+
+/* ---------- 分享 modal ---------- */
+.vault-modal-backdrop {
+  position: fixed; inset: 0; z-index: 200; background: rgba(4, 5, 8, 0.75);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 4vh 5vw;
+}
+.vault-modal { width: min(560px, 100%); padding: 1.8rem 1.8rem 1.4rem; }
+.vault-modal-title {
+  font-family: var(--font-en); font-weight: 600; font-size: 0.95rem;
+  letter-spacing: 0.3em; color: var(--ice); text-shadow: 0 0 12px rgba(168,230,255,.4);
+}
+.vault-modal-file {
+  margin-top: 0.5rem; font-size: 1rem; color: var(--cold);
+  word-break: break-all;
+}
+.vault-share-url {
+  margin-top: 1.1rem; font-family: var(--font-en); font-size: 0.95rem;
+  letter-spacing: 0.05em; color: var(--ice); border: 1px solid rgba(168,230,255,.25);
+  border-radius: 8px; padding: 0.65rem 0.9rem; cursor: pointer; background: rgba(168,230,255,.05);
+  display: flex; justify-content: space-between; align-items: center; gap: 0.8rem;
+  word-break: break-all; position: relative;
+}
+.vault-share-url:hover { border-color: var(--ice); }
+.vault-copy-hint {
+  flex-shrink: 0; font-size: 0.62rem; letter-spacing: 0.25em; color: var(--faint);
+}
+.vault-pin-row { margin-top: 1rem; display: flex; align-items: center; gap: 1rem; }
+.vault-pin-label {
+  font-family: var(--font-en); letter-spacing: 0.4em; font-size: 0.75rem; color: var(--dim);
+}
+.vault-pin {
+  font-family: var(--font-en); font-weight: 700; font-size: 1.8rem;
+  letter-spacing: 0.7em; color: var(--cold); text-shadow: 0 0 16px rgba(168,230,255,.45);
+  border: 1px dashed rgba(168,230,255,.35); border-radius: 10px; padding: 0.3rem 0.9rem 0.3rem 1.3rem;
+  cursor: pointer; background: rgba(168,230,255,.04);
+}
+.vault-pin:hover { border-color: var(--ice); }
+.vault-curl { margin-top: 1.1rem; }
+.vault-curl-head {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;
+}
+.vault-curl-head span { font-size: 0.7rem; letter-spacing: 0.3em; color: var(--dim); font-family: var(--font-en); }
+.vault-curl-head button {
+  background: none; border: 1px solid var(--line); color: var(--ice);
+  font-family: var(--font-en); font-size: 0.62rem; letter-spacing: 0.2em;
+  padding: 0.3em 0.8em; border-radius: 5px; cursor: pointer;
+}
+.vault-curl-head button:hover { border-color: var(--ice); }
+.vault-curl pre {
+  margin: 0; padding: 0.8rem 1rem; border-radius: 8px; overflow-x: auto;
+  background: rgba(5, 8, 12, 0.85); border: 1px solid var(--line);
+  font-family: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
+  font-size: 0.72rem; color: var(--ice); line-height: 1.7;
+}
+.vault-modal-foot {
+  margin-top: 1.3rem; display: flex; justify-content: flex-end; gap: 0.6rem;
+  align-items: center;
+}
+.vault-modal-note { margin-top: 0.9rem; text-align: center; font-size: 0.65rem; letter-spacing: 0.25em; color: var(--faint); font-family: var(--font-en); }
+
+/* ---------- LockScreen ---------- */
+.vault-lock { width: min(640px, 100%); margin: 0 auto; }
+.vault-lock-panel { padding: 2.6rem 2.6rem 2rem; text-align: center; }
+.vault-lock-head {
+  display: flex; align-items: center; justify-content: center; gap: 0.6em;
+  margin-bottom: 1.8rem;
+}
+.vault-lock-led {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--red);
+  box-shadow: 0 0 8px var(--red); animation: scrollPulse 1.4s infinite;
+}
+.vault-lock-os {
+  font-family: var(--font-en); font-size: 0.7rem; letter-spacing: 0.45em; color: var(--faint);
+}
+.vault-lock-title {
+  font-family: var(--font-en); font-weight: 700;
+  font-size: clamp(2.2rem, 6.5vw, 3.6rem);
+  letter-spacing: 0.14em; color: var(--red);
+  text-shadow: 0 0 18px rgba(255, 46, 77, 0.45), 0 0 60px rgba(255, 46, 77, 0.2);
+  display: block;
+}
+.vault-lock-sub {
+  margin-top: 0.7rem; font-family: var(--font-en); font-size: 0.85rem;
+  letter-spacing: 0.5em; color: var(--dim);
+}
+.vault-lock-form { margin-top: 2.2rem; text-align: left; }
+.vault-lock-form label {
+  display: block; font-family: var(--font-en); font-size: 0.75rem;
+  letter-spacing: 0.35em; color: var(--ice); margin-bottom: 0.55rem;
+}
+.vault-lock-inputrow {
+  display: flex; align-items: center; gap: 0.6rem;
+  border: 1px solid rgba(160, 215, 255, 0.25); border-radius: 8px;
+  padding: 0.55rem 0.9rem; background: rgba(160, 215, 255, 0.04);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.vault-lock-inputrow:focus-within {
+  border-color: var(--red); box-shadow: 0 0 16px rgba(255, 46, 77, 0.15);
+}
+.vault-lock-prompt { color: var(--red); animation: scrollPulse 1s infinite; font-size: 0.9rem; }
+.vault-lock-inputrow input {
+  flex: 1; background: none; border: none; outline: none; color: var(--cold);
+  font-family: var(--font-en); font-size: 1.2rem; letter-spacing: 0.4em;
+  caret-color: var(--ice); min-width: 0;
+}
+.vault-lock-form .vault-btn { width: 100%; margin-top: 1rem; }
+.vault-lock-status {
+  margin-top: 1.2rem; font-family: var(--font-en); font-size: 0.8rem;
+  letter-spacing: 0.3em; color: var(--faint);
+}
+.vault-lock-status.err {
+  color: var(--red); text-shadow: 0 0 10px rgba(255, 46, 77, 0.5);
+}
+.vault-lock-hint { margin-top: 1.8rem; font-size: 0.65rem; letter-spacing: 0.3em; color: var(--faint); }
+
+@media (max-width: 900px) {
+  .vault-file { flex-direction: column; align-items: flex-start; }
+  .vault-file-actions { width: 100%; justify-content: flex-end; }
+  .vault-lock-panel { padding: 2rem 1.4rem 1.6rem; }
+}

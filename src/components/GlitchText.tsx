@@ -111,11 +111,10 @@ export default function GlitchText({
       <span className="ghost" aria-hidden="true">
         {text}
       </span>
-      {!done && (
-        <span className="dec" aria-hidden="true">
-          {out}
-        </span>
-      )}
+      {/* dec 恆在：done 後顯示最終文字（修 bug：原寫法 done 即 unmount → 解碼完文字消失） */}
+      <span className="dec" aria-hidden="true">
+        {done ? text : out}
+      </span>
     </span>
   );
 }

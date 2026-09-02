@@ -33,7 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     sessionSecret: env.VAULT_SESSION_SECRET ?? "dev-secret-change-me",
     distDir: distDir ?? (env.NODE_ENV === "production" ? path.join(cwd, "dist") : null),
     cookieSecure: env.NODE_ENV === "production",
-    loginRateMax: 5,
+    loginRateMax: Number(env.VAULT_LOGIN_RATE_MAX ?? 5),
     loginRateWindowMs: 15 * 60 * 1000,
   };
 }
