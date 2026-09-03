@@ -19,7 +19,7 @@ import type {
   StrategyId,
 } from "../types.js";
 import { resolveParams } from "./params.js";
-import { Rolling1mStats, ONE_MINUTE_MS } from "./rolling.js";
+import { Rolling1mStats } from "./rolling.js";
 import {
   eventReason,
   eventTriggerJson,
