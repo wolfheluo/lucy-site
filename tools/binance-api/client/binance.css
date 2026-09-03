@@ -84,11 +84,11 @@
 /* ── 主網格 ────────────────────────────────────────────────── */
 .bq-grid {
   display: grid;
-  grid-template-columns: 1.55fr 1fr;
+  grid-template-columns: 1.42fr 1fr 300px;
   grid-template-areas:
-    "radar radar"
-    "account matrix"
-    "ledger trend";
+    "radar radar trades"
+    "account matrix trades"
+    "ledger trend trades";
   gap: 10px;
 }
 .bq-radar { grid-area: radar; }
@@ -96,6 +96,10 @@
 .bq-matrix { grid-area: matrix; }
 .bq-ledger { grid-area: ledger; }
 .bq-trend { grid-area: trend; }
+.bq-trades { grid-area: trades; min-width: 0; }
+@media (max-width: 1500px) {
+  .bq-grid { grid-template-columns: 1.3fr 1fr 252px; }
+}
 
 /* ── GRAPH CONTROL 雷達 ────────────────────────────────────── */
 .bq-radar-body {
@@ -506,4 +510,80 @@
   .bq-boot .bar::after {
     animation: none;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TAPE TRADES — 成交刷屏流（整頁最右直欄）
+   ══════════════════════════════════════════════════════════════ */
+.bq-trades {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.bq-trades.frozen .bq-trades-body { opacity: 0.55; }
+.bq-trades.frozen .hd-dot { background: var(--bq-warn); box-shadow: 0 0 8px var(--bq-warn); }
+.bq-trades-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 頂部淡入 + 底部下沉淡出 */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 30px), transparent 100%);
+  contain: strict;
+}
+.bq-tr {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font: 10.5px/19px var(--bq-mono);
+  padding: 0 8px;
+  border-bottom: 1px dashed rgba(148, 190, 255, 0.055);
+  white-space: nowrap;
+  animation: bqTrIn 0.22s ease-out;
+}
+@keyframes bqTrIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.bq-tr.buy { color: var(--bq-ok); }
+.bq-tr.sell { color: var(--red); }
+.bq-tr .tm { flex: none; width: 56px; color: var(--faint); font-size: 9.5px; }
+.bq-tr .px { flex: 1; text-align: right; font-weight: 600; letter-spacing: 0.2px; }
+.bq-tr .qt { flex: none; width: 52px; text-align: right; color: var(--dim); font-size: 9.5px; }
+.bq-tr .uv { flex: none; width: 58px; text-align: right; color: var(--faint); font-size: 9.5px; }
+.bq-tr .vb {
+  flex: none;
+  width: 34px;
+  height: 2px;
+  background: rgba(148, 190, 255, 0.14);
+  position: relative;
+}
+.bq-tr .vb::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--vol, 40%);
+  background: currentColor;
+  opacity: 0.85;
+  box-shadow: 0 0 5px currentColor;
+}
+@media (max-width: 1500px) {
+  .bq-tr { font-size: 9.5px; line-height: 17px; padding: 0 6px; gap: 4px; }
+  .bq-tr .tm { width: 48px; }
+  .bq-tr .qt { width: 44px; }
+  .bq-tr .uv { width: 46px; }
+  .bq-tr .vb { width: 26px; }
+}
+
+.bq-tr-empty {
+  padding: 14px 10px;
+  font: 10px var(--bq-mono);
+  color: var(--faint);
+  letter-spacing: 1px;
 }

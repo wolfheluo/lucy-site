@@ -5,7 +5,7 @@
 //  資料通道：/state 初始化 + SSE（/stream）每 update 帶完整 state + delta feed
 //  canvas 手刻（零依賴）：雷達 rAF 連續（掃描線）、趨勢線資料驅動重繪
 // =====================================================================
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useReducedMotion } from "framer-motion";
 import type { MonitorSnapshot, PanelUpdate } from "../types";
 import { binanceApi } from "./api";
@@ -26,6 +26,8 @@ import "./binance.css";
 const TRADE_CAP = 140;
 const LEDGER_CAP = 200;
 const HIST_SECONDS = 120; // 趨勢線樣本深度
+const TAPE_BUF = 200; // 成交流緩衝（buffer 全留，DOM 只渲染前段）
+const TAPE_DOM = 56; // tape 實際渲染行數（其餘下沉出容器被 mask 裁掉）
 
 interface HistPoint {
   ts: number;
@@ -99,6 +101,15 @@ let rowSeq = 1;
    GRAPH CONTROL —— 六軸雷達 canvas（rAF 連續、掃描線、事件爆閃）
    ================================================================= */
 const RADAR_LABELS = ["CVD", "DIR", "DEPTH", "OI", "LIQ", "PRICE"] as const;
+
+interface TapeRow {
+  id: number;
+  t: number;
+  p: number;
+  q: number;
+  m: boolean;
+  vol: number; // 0-100 量能條
+}
 
 interface RadarProps {
   axes: number[]; // 六軸 0..1（與 RADAR_LABELS 對應）
@@ -332,9 +343,15 @@ export default function BinanceApiPage() {
   const [flashes, setFlashes] = useState<RadarFlash[]>([]);
   const [hist, setHist] = useState<HistPoint[]>([]);
   const [nowTick, setNowTick] = useState(0);
+  const [tapeRows, setTapeRows] = useState<TapeRow[]>([]);
+  const [tapeFrozen, setTapeFrozen] = useState(false);
 
   const histRef = useRef<HistPoint[]>([]);
   const flashSeq = useRef(1);
+  const tapeBuf = useRef<TapeRow[]>([]);
+  const tapeSeq = useRef(1);
+  const tapeRaf = useRef(0);
+  const tapeHover = useRef(false);
 
   const pushLedger = (row: Omit<LedgerRow, "id">) =>
     setLedger((prev) => {
@@ -348,6 +365,45 @@ export default function BinanceApiPage() {
       return next.slice(0, 24);
     });
 
+  // ── tape（成交流）────────────────────────────────────────
+  const flushTape = () => {
+    const buf = tapeBuf.current;
+    if (buf.length === 0) return;
+    let maxQ = 0;
+    for (const r of buf) if (r.q > maxQ) maxQ = r.q;
+    setTapeRows(
+      buf.slice(0, TAPE_DOM).map((r) => ({
+        ...r,
+        vol: maxQ > 0 ? Math.max(4, Math.min(100, Math.round((r.q / maxQ) * 100))) : 0,
+      })),
+    );
+  };
+  const scheduleTapeFlush = () => {
+    if (tapeRaf.current) return;
+    tapeRaf.current = requestAnimationFrame(() => {
+      tapeRaf.current = 0;
+      if (!tapeHover.current) flushTape();
+    });
+  };
+  const pushTrades = (list: Array<{ t: number; p: number | string; q: number | string; m: boolean | string }>) => {
+    if (!list || list.length === 0) return;
+    const buf = tapeBuf.current;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const tr = list[i];
+      const p = Number(tr.p);
+      const q = Number(tr.q);
+      if (!(p > 0) || !(q > 0)) continue;
+      buf.unshift({ id: tapeSeq.current++, t: tr.t, p, q, m: tr.m === true || tr.m === "true", vol: 0 });
+    }
+    if (buf.length > TAPE_BUF) buf.length = TAPE_BUF;
+    scheduleTapeFlush();
+  };
+  const setTapeHover = (h: boolean) => {
+    tapeHover.current = h;
+    setTapeFrozen(h);
+    if (!h) flushTape(); // 移開瞬間補上凍結期間累積的行
+  };
+
   // ── 初始：state + auth + BOOT ledger ────────────────────────
   useEffect(() => {
     let alive = true;
@@ -359,6 +415,7 @@ export default function BinanceApiPage() {
         setState(s.state);
         setFeed(mergeFeed(emptyFeed(), s.feed));
         seedHist(s.state);
+        pushTrades(s.feed.trades);
       })
       .catch(() => {
         if (alive) pushLedger({ ts: Date.now(), code: "STATE FAIL", info: "cannot reach /state", cls: "sys", st: "ERR" });
@@ -440,6 +497,7 @@ export default function BinanceApiPage() {
         if (nowS % 1 === 0) setNowTick(nowS);
 
         // feed delta → ledger + 雷達爆閃
+        pushTrades(u.feed.trades);
         for (const a of u.feed.alerts) {
           const t = a.t;
           pushLedger({
@@ -500,7 +558,10 @@ export default function BinanceApiPage() {
       }
     };
     es.onerror = () => setConn("closed");
-    return () => es.close();
+    return () => {
+      es.close();
+      if (tapeRaf.current) cancelAnimationFrame(tapeRaf.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -760,12 +821,56 @@ export default function BinanceApiPage() {
             <TrendCanvas hist={hist} nowTick={nowTick} />
           </div>
         </section>
+
+        {/* ── TAPE TRADES（最右直欄成交流）────────────────── */}
+        <TradesTape rows={tapeRows} frozen={tapeFrozen} onHover={setTapeHover} />
       </div>
     </div>
   );
 }
 
 /* ── 小元件 ─────────────────────────────────────────────────── */
+function TradesTape({
+  rows,
+  frozen,
+  onHover,
+}: {
+  rows: TapeRow[];
+  frozen: boolean;
+  onHover: (h: boolean) => void;
+}) {
+  return (
+    <section
+      className={`bq-mod bq-trades${frozen ? " frozen" : ""}`}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+    >
+      <div className="bq-mod-head">
+        <span>TAPE TRADES — EXECUTION STREAM</span>
+        <span className="hd-right">
+          <span className={`hd-dot ${frozen ? "" : "ok"}`} />
+          {frozen ? "⏸ FREEZE" : "LIVE"}
+        </span>
+      </div>
+      <div className="bq-trades-body">
+        {rows.map((r) => (
+          <div key={r.id} className={`bq-tr ${r.m ? "sell" : "buy"}`}>
+            <span className="tm">{fmtClock(r.t)}</span>
+            <span className="px">{fmtPrice(r.p)}</span>
+            <span className="qt">{fmtQty(r.q)}</span>
+            <span className="uv">{fmtUsdt(r.p * r.q)}</span>
+            <span
+              className="vb"
+              style={{ "--vol": `${r.vol}%` } as CSSProperties}
+            />
+          </div>
+        ))}
+        {rows.length === 0 && <div className="bq-tr-empty">awaiting execution stream…</div>}
+      </div>
+    </section>
+  );
+}
+
 function FailureRow({ name, val, st }: { name: string; val: string; st: string }) {
   return (
     <div className="bq-mx-row">
