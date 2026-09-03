@@ -19,7 +19,7 @@ import type {
   StrategyId,
 } from "../types.js";
 import { resolveParams } from "./params.js";
-import { Rolling1mStats } from "./rolling.js";
+import { Rolling1mStats, ONE_MINUTE_MS } from "./rolling.js";
 import {
   eventReason,
   eventTriggerJson,
@@ -32,6 +32,9 @@ import {
 const FLUSH_DELAY_MS = 160;
 const RECONNECT_DELAY_MS = 3000;
 const WATCHDOG_INTERVAL_MS = 20_000;
+const STRATEGY_TICK_MS = 1000; // 策略節拍（B-1：1s bar 化）
+/** 暖機所需資料跨度（<60s 因窗口本身只容納 60s、最舊樣本會被推出） */
+const WARMUP_SPAN_MS = 55_000;
 const WATCHDOG_IDLE_MS = 75_000;
 const OI_FETCH_TIMEOUT_MS = 3000;
 
@@ -73,7 +76,7 @@ export class BinanceMonitor {
   private readonly log: (msg: string) => void;
   private readonly fetchImpl: typeof fetch;
   private readonly wsFactory: (url: string) => WsLike;
-  private readonly ring = new Rolling1mStats();
+  private readonly ring: Rolling1mStats;
   private readonly strategy: StrategyEngine;
 
   // 共享市場狀態（鏡像 Python HighFreqQuantSystem 欄位）
@@ -104,8 +107,11 @@ export class BinanceMonitor {
   private oiTimer: NodeJS.Timeout | null = null;
   private watchdogTimer: NodeJS.Timeout | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
+  private strategyTimer: NodeJS.Timeout | null = null;
   private flushPending = false;
   private lastMessageAt = 0;
+  /** 1 分鐘統計是否已暖機（B-2：重連後需 ≥60s 時間跨度的成交才恢復策略決策） */
+  private statsWarm = false;
 
   private readonly listeners = new Set<EngineListener>();
   private readonly stmtInsertForce: ReturnType<Db["prepare"]>;
@@ -120,12 +126,14 @@ export class BinanceMonitor {
     this.wsFactory =
       options.wsFactory ??
       ((url) => new WebSocket(url) as unknown as WsLike);
+    this.ring = new Rolling1mStats(200_000, this.now);
 
     this.strategy = new StrategyEngine({
       initialCapital: this.params.initialCapital,
       positionAllocation: this.params.positionAllocation,
       liquidationTakeProfit: this.params.liquidationTakeProfit,
       liquidationStopLoss: this.params.liquidationStopLoss,
+      cvdStopLoss: this.params.cvdStopLoss,
       liquidationMaxHoldMs: this.params.liquidationMaxHoldMs,
       cvdThreshold: this.params.cvdThreshold,
       oiIncreaseThreshold: this.params.oiIncreaseThreshold,
@@ -171,6 +179,12 @@ export class BinanceMonitor {
       this.watchdog();
     }, WATCHDOG_INTERVAL_MS);
     this.watchdogTimer.unref();
+
+    // B-1：策略 1s 節拍（每 tick 聚合一次快照餵策略——不是每筆成交）
+    this.strategyTimer = setInterval(() => {
+      this.onStrategyTick();
+    }, STRATEGY_TICK_MS);
+    this.strategyTimer.unref();
 
     this.flushNow();
   }
@@ -223,6 +237,7 @@ export class BinanceMonitor {
       ts: this.now(),
       running: this.running,
       connected: this.connected,
+      warmingUp: !this.statsWarm,
       symbol: this.params.symbol.toUpperCase(),
       startedAt: this.startedAt,
       lastPrice: this.lastPrice,
@@ -253,7 +268,11 @@ export class BinanceMonitor {
       ws.onopen = () => {
         this.connected = true;
         this.lastMessageAt = this.now();
-        this.log(`ws connected (${this.params.symbol} combined stream)`);
+        // B-2：重連後清窗重算統計（成交無歷史回放，缺漏期間不可靠），
+        // 重新暖機（時間跨度 ≥60s）才恢復策略決策
+        this.ring.clear();
+        this.statsWarm = false;
+        this.log(`ws connected (${this.params.symbol} combined stream) — re-warming 1m stats`);
         this.flushNow();
       };
       ws.onmessage = (ev) => this.onWsMessage(ev.data);
@@ -326,17 +345,14 @@ export class BinanceMonitor {
 
     this.lastPrice = p;
     // 1 = 主動買（m=false）；-1 = 主動賣（m=true）
-    this.ring.push(Math.trunc(t), q, m ? -1 : 1, t);
+    // B-2：窗口以牆鐘為基準；過期成交由 rolling 內部忽略
+    this.ring.push(Math.trunc(t), q, m ? -1 : 1);
+    this.updateWarm(); // 成交跨度 ≥60s 即暖機完成
 
     const trade: FeedTrade = { t: Math.trunc(t), p, q, m };
     this.pushRecent(this.recentTrades, trade, MAX_RECENT_TRADES);
     this.deltaTrades.unshift(trade);
-
-    this.processStrategySnapshot({
-      timestamp: t,
-      price: p,
-      cvd_1m: this.ring.stats().cvd,
-    });
+    // B-1：策略改由 1s 節拍驅動（onStrategyTick），不再每筆成交都 process
 
     this.scheduleFlush();
   }
@@ -400,6 +416,27 @@ export class BinanceMonitor {
   }
 
   /** 每次市場更新後呼叫：交由紙上策略引擎產生 ENTRY / EXIT 事件 */
+  /** 1s 節拍：聚合當刻快照餵策略（B-1：確認/放緩計數以「秒」為語意） */
+  private onStrategyTick(): void {
+    if (!this.running || !this.connected) return;
+    this.updateWarm();
+    const ref = this.lastPrice > 0 ? this.lastPrice : this.markPrice;
+    if (!(ref > 0)) return;
+    this.processStrategySnapshot({
+      timestamp: this.now(),
+      price: ref,
+      cvd_1m: this.ring.stats().cvd,
+    });
+  }
+
+  /** 暖機判定：窗內成交時間跨度 ≥55s（60s 窗的最舊樣本會被推出，跨度永不達 60s） */
+  private updateWarm(): void {
+    if (!this.statsWarm && this.ring.timeSpanMs() >= WARMUP_SPAN_MS) {
+      this.statsWarm = true;
+      this.log("1m stats warmed — strategy decision enabled");
+    }
+  }
+
   private processStrategySnapshot(fields: {
     timestamp: number;
     price: number;
@@ -407,6 +444,8 @@ export class BinanceMonitor {
     liquidation_side?: "BUY" | "SELL";
     liquidation_usdt?: number;
   }): void {
+    // B-2：統計未暖機（斷線重連初期）不做任何策略決策
+    if (!this.statsWarm) return;
     const snapshot: StrategySnapshot = {
       timestamp: fields.timestamp,
       price: fields.price,
@@ -493,6 +532,10 @@ export class BinanceMonitor {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
+    }
+    if (this.strategyTimer) {
+      clearInterval(this.strategyTimer);
+      this.strategyTimer = null;
     }
     this.flushPending = false;
 

@@ -60,6 +60,8 @@ export interface StrategyEngineOptions {
   oppositeWallRatio: number;
   cvdSlowCount: number;
   cvdMaxHoldMs: number;
+  /** CVD 順勢停損（signed return，-0.005 = -0.5%） */
+  cvdStopLoss: number;
   cooldownMs: number;
 }
 
@@ -229,7 +231,10 @@ export class StrategyEngine {
           position.side === "LONG"
             ? snapshot.depth_imbalance <= 1 - this.opts.oppositeWallRatio
             : snapshot.depth_imbalance >= this.opts.oppositeWallRatio;
-        if (position.cvdSlowCount >= this.opts.cvdSlowCount) {
+        // B-4：停損最優先——虧損守護不等待放緩/牆/持倉上限
+        if (signedReturn <= this.opts.cvdStopLoss) {
+          reason = "risk stop reached";
+        } else if (position.cvdSlowCount >= this.opts.cvdSlowCount) {
           reason = "CVD growth slowed for three updates";
         } else if (oppositeWall) {
           reason = "opposite order-book wall reached 65%";
@@ -248,7 +253,9 @@ export class StrategyEngine {
     side: PositionSide,
     snapshot: StrategySnapshot,
     conditions: Record<string, unknown>
-  ): StrategyOrderEvent {
+  ): StrategyOrderEvent | null {
+    // B-3：資本已耗盡（≤0）不再開倉——否則 quantity≤0、部位反向、虧損無上界
+    if (this.capital <= 0) return null;
     const price = snapshot.price;
     const quantity = (this.capital * this.opts.positionAllocation) / price;
     const position: StrategyPosition = {

@@ -21,8 +21,12 @@ export class Rolling1mStats {
   private lo = 0;
   private buyVol = 0;
   private sellVol = 0;
+  /** 牆鐘（B-2：窗口基準 = 牆鐘而非最後一筆成交的事件時間） */
+  private readonly nowFn: () => number;
 
-  constructor(private readonly capacity = 200_000) {}
+  constructor(private readonly capacity = 200_000, nowFn?: () => number) {
+    this.nowFn = nowFn ?? Date.now;
+  }
 
   get size(): number {
     return this.entries.length - this.lo;
@@ -41,14 +45,16 @@ export class Rolling1mStats {
   }
 
   /**
-   * 推入一筆成交。
-   * @param t         Binance 成交時間（epoch ms）
-   * @param qty       數量
-   * @param side      1 = 主動買 / -1 = 主動賣
-   * @param nowMs     統計窗口基準時間（通常即成交事件時間）
+   * 推入一筆成交（窗口基準 = 牆鐘）。
+   * @param t    Binance 成交時間（epoch ms）
+   * @param qty  數量
+   * @param side 1 = 主動買 / -1 = 主動賣
    */
-  push(t: number, qty: number, side: 1 | -1, nowMs: number): void {
-    this.expireBefore(nowMs - ONE_MINUTE_MS);
+  push(t: number, qty: number, side: 1 | -1): void {
+    const now = this.nowFn();
+    // B-2：延遲 >60s 的過期成交直接忽略（防斷線重連後回補舊樣本污染統計）
+    if (t < now - ONE_MINUTE_MS) return;
+    this.expireBefore(now - ONE_MINUTE_MS);
     this.entries.push({ t, q: qty, d: side });
     if (side === 1) this.buyVol += qty;
     else this.sellVol += qty;
@@ -59,6 +65,12 @@ export class Rolling1mStats {
       else this.sellVol -= oldest.q;
       this.lo += 1;
     }
+  }
+
+  /** 窗口內最早與最晚成交的時間跨度（暖機判斷用；空窗回 0） */
+  timeSpanMs(): number {
+    if (this.lo >= this.entries.length) return 0;
+    return this.entries[this.entries.length - 1].t - this.entries[this.lo].t;
   }
 
   /** 依目前累計值回傳 1 分鐘統計（不變動狀態） */

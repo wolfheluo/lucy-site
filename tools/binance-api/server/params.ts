@@ -20,6 +20,7 @@ export const DEFAULT_PARAMS: BinanceParams = {
   oppositeWallRatio: 0.65,
   cvdSlowCount: 3,
   cvdMaxHoldMs: 15 * 60 * 1000,
+  cvdStopLoss: -0.005,
   cooldownMs: 60 * 1000,
   oiPollMs: 3000,
 };

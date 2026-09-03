@@ -43,6 +43,8 @@ export interface BinanceParams {
   cvdSlowCount: number;
   /** CVD 順勢最長持有 ms */
   cvdMaxHoldMs: number;
+  /** CVD 順勢停損（signed return，-0.005 = -0.5%；B-4） */
+  cvdStopLoss: number;
   /** 出場後冷卻 ms */
   cooldownMs: number;
   /** OI REST 輪詢間隔 ms */
@@ -110,6 +112,8 @@ export interface MonitorSnapshot {
   ts: number;
   running: boolean;
   connected: boolean;
+  /** 1 分鐘統計是否仍在暖機（斷線重連初期 true——資料不足策略不決策） */
+  warmingUp: boolean;
   symbol: string;
   startedAt: number;
   lastPrice: number;
