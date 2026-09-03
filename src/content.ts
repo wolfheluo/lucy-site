@@ -9,7 +9,7 @@ export const profile = {
   altName: "野格", // 中文名或暱稱
   handle: "CYBER_SPACE", // 代號（出現在導覽 logo 與 footer）
   roleEn: "NETRUNNER // CYBERSECURITY", // Hero 英文職稱/定位
-  tagline: "在霓虹與數據的夾縫之間，我的露西有了屬於自己的月球。", // Hero 中文標語
+  tagline: "在霓虹與數據的夾縫之間，我的露西終於有了屬於自己的月球。", // Hero 中文標語
   bootOs: "NETRUNNER OS", // 載入畫面上的系統名稱
   bootVer: "v0.9.7 // DEEP-DIVE MODULE", // 載入畫面上的版本字樣
 };
@@ -18,8 +18,9 @@ export const about = {
   headingEn: "ABOUT",
   headingZh: "關於我",
   paragraphs: [
-    "你好，我是 <strong>野格</strong>。平常沒事就在城市的資料流裡潛行:<strong>安靜、精準、不留痕跡</strong>。",
-    "喜歡潛水、滑雪、徒步、電音、當然還有2077。這裡是我在網路上的一小塊<span class=\"red\">自留地</span>，歡迎四處看看。",
+    "你好，我是 <strong>野格</strong>。<br>平常沒事就在城市的資料流裡潛行。<strong>安靜、精準、不留痕跡</strong>。",
+    "喜歡潛水、滑雪、徒步、電音、當然還有2077。<br>最近想去跳傘跟阿勒泰滑雪，那個藍調超美。",
+	"這裡是我在網路上的一小塊<span class=\"red\">自留地</span>，歡迎四處看看。",
   ],
   stats: [
     { value: "∞", label: "DEEP-DIVE" },
@@ -83,7 +84,7 @@ export const projects = {
 export const contact = {
   headingEn: "CONTACT",
   headingZh: "聯絡",
-  line: "歡迎交流技術、打遊戲、找旅遊/吃飯搭子或純聊聊月球——我的頻道永遠開啟。",
+  line: "歡迎交流技術、找旅遊/吃飯搭子或純聊聊月球——我的頻道永遠開啟。",
   email: "gm900411@gmail.com", // 主要聯絡信箱
   socials: [
     { label: "GITHUB", href: "https://github.com/wolfheluo" },
