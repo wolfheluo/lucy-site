@@ -38,6 +38,31 @@ const MIGRATIONS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_vault_expire ON vault_files(expire_time)`,
   `CREATE INDEX IF NOT EXISTS idx_vault_share ON vault_files(share_id)`,
+  // ── binance quant 強平事件（大額強平監控）─────────────────────────
+  `CREATE TABLE IF NOT EXISTS binance_force_orders (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp  INTEGER NOT NULL,
+    side       TEXT NOT NULL,
+    price      REAL NOT NULL,
+    quantity   REAL NOT NULL,
+    total_usdt REAL NOT NULL
+  )`,
+  // ── binance quant 紙上策略訂單（triggerConditions 為 JSON 字串）────
+  `CREATE TABLE IF NOT EXISTS binance_strategy_orders (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp          INTEGER NOT NULL,
+    strategy           TEXT NOT NULL,
+    action             TEXT NOT NULL,
+    side               TEXT NOT NULL,
+    price              REAL NOT NULL,
+    quantity           REAL NOT NULL,
+    pnl                REAL NOT NULL,
+    capital_before     REAL NOT NULL,
+    capital_after      REAL NOT NULL,
+    trigger_conditions TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_binance_force_ts ON binance_force_orders(timestamp)`,
+  `CREATE INDEX IF NOT EXISTS idx_binance_strategy_ts ON binance_strategy_orders(timestamp)`,
 ];
 
 export function migrate(db: Db): void {
