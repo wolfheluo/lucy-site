@@ -16,7 +16,7 @@ import { vaultApi } from "./api";
 const BOOT_LINES = [
   { t: "> ESTABLISHING SECURE LINK", ok: true },
   { t: "> HANDSHAKE OK // ENCRYPTED", ok: true },
-  { t: "> ICE WALL DETECTED", ok: false },
+  { t: "> BLACK WALL DETECTED", ok: false },
 ];
 
 const TITLE = "ACCESS DENIED";
