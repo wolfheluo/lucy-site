@@ -64,20 +64,8 @@ export const projects = {
       desc: "一座以捲動驅動鏡頭的 3D 個人網站，也是你正在看的這個作品本身。",
       tags: ["R3F", "Vite", "GLSL"],
     },
-    {
-      idx: "P-02",
-      title: "GHOST PROTOCOL",
-      zh: "幽靈協定",
-      desc: "即時協作工具的原型，把零散的團隊資訊流整理成一條乾淨的管線。",
-      tags: ["React", "WebSocket", "Node.js"],
-    },
-    {
-      idx: "P-03",
-      title: "NEON SIGNAL",
-      zh: "霓虹訊號",
-      desc: "生成式視覺的實驗場：用 Web Audio 驅動即時粒子畫面，讓聲音看得見。",
-      tags: ["Canvas", "Web Audio", "演算法"],
-    },
+    // P-02 起為可執行的 tool（FILE VAULT 等），由 tools/ manifest 自動掛上：
+    // 新增 tool（tools/<id>/meta.ts 帶 projectCard）即自動出現在作品欄，不需在此手動新增。
   ],
 };
 

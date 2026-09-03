@@ -23,7 +23,7 @@ export interface ToolProjectEntry extends ToolProjectCard {
   href: string;
 }
 
-/** 由 tool manifest 產生作品卡（P-04 起跳，接在 content.ts 手動作品之後） */
+/** 由 tool manifest 產生作品卡：接在 content.ts 手動作品之後自動編號（手動 N 筆 → tool 由 P-(N+1) 起跳） */
 export function toolProjectCards(manualCount: number): ToolProjectEntry[] {
   let seq = manualCount;
   const out: ToolProjectEntry[] = [];
