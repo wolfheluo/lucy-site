@@ -59,6 +59,8 @@ export interface StrategyEngineOptions {
   cvdConfirmationUpdates: number;
   oppositeWallRatio: number;
   cvdSlowCount: number;
+  /** cvd_breakout 最短持倉：hold < 此值期間只有 stop loss 能出場 */
+  cvdMinHoldMs: number;
   cvdMaxHoldMs: number;
   /** CVD 順勢停損（signed return，-0.005 = -0.5%） */
   cvdStopLoss: number;
@@ -234,6 +236,9 @@ export class StrategyEngine {
         // B-4：停損最優先——虧損守護不等待放緩/牆/持倉上限
         if (signedReturn <= this.opts.cvdStopLoss) {
           reason = "risk stop reached";
+        } else if (holdMs < this.opts.cvdMinHoldMs) {
+          // 輕量一致性：最短持倉內只有 SL 能出場——擋下深度牆/CVD 放緩秒退
+          // （maxHold 15min 不可能在 <15s 成立，無需在此排除）
         } else if (position.cvdSlowCount >= this.opts.cvdSlowCount) {
           reason = "CVD growth slowed for three updates";
         } else if (oppositeWall) {
@@ -317,6 +322,48 @@ export class StrategyEngine {
       capitalAfter: this.capital,
       conditions,
     };
+  }
+
+  /**
+   * 強制結算所有未平倉部位（graceful shutdown / stop 收工用）。
+   * 以單一參考價統一結算（refPrice ≤ 0 時退回各部位 entryPrice → pnl 0）。
+   * 回傳 EXIT events（呼叫端負責落庫）；清空 positions。
+   */
+  settleAll(
+    refPrice: number,
+    timestamp: number,
+    reason = "engine shutdown settlement"
+  ): StrategyOrderEvent[] {
+    const events: StrategyOrderEvent[] = [];
+    const ts = Math.trunc(timestamp);
+    for (const [strategy, position] of this.positions) {
+      const px = refPrice > 0 ? refPrice : position.entryPrice;
+      const signedReturn = this.signedReturn(position, px);
+      const entryNotional = position.entryPrice * position.quantity;
+      const pnl = entryNotional * signedReturn;
+      const capitalBefore = this.capital;
+      this.capital += pnl;
+      this.lastExitTime.set(strategy, ts);
+      events.push({
+        timestamp: ts,
+        strategy,
+        action: "EXIT",
+        side: position.side,
+        price: px,
+        quantity: position.quantity,
+        pnl,
+        capitalBefore,
+        capitalAfter: this.capital,
+        conditions: {
+          exit_reason: reason,
+          signed_return_pct: signedReturn * 100,
+          hold_minutes: Math.max(0, ts - position.entryTime) / 60_000,
+          entry_conditions: position.triggerConditions,
+        },
+      });
+    }
+    this.positions.clear();
+    return events;
   }
 
   private signedReturn(position: StrategyPosition, price: number): number {

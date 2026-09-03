@@ -63,6 +63,12 @@ const MIGRATIONS: string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_binance_force_ts ON binance_force_orders(timestamp)`,
   `CREATE INDEX IF NOT EXISTS idx_binance_strategy_ts ON binance_strategy_orders(timestamp)`,
+  // ── binance quant 引擎狀態（單列 id=1：紙上資本，restart 續存）──────
+  `CREATE TABLE IF NOT EXISTS binance_engine_state (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    capital    REAL NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
 ];
 
 export function migrate(db: Db): void {

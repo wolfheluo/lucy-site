@@ -22,10 +22,13 @@ import {
 } from "./auth.js";
 import { makeRateLimiter } from "./rate-limit.js";
 import { mountTools } from "./registry.js";
+import type { ServerToolHandle } from "../tools/types.js";
 
 /** Hono app + 共享 SQLite 實例（M1：測試結束可 db.close()） */
 export interface LucyApp extends Hono {
   db: Db;
+  /** tool 生命週期 handle（graceful shutdown：SIGINT 前結算引擎） */
+  handles: Record<string, ServerToolHandle>;
 }
 
 /** 公開端 body 上限（H4：login / pin 皆為小型表單，超限直接 413） */
@@ -35,7 +38,6 @@ export function createApp(cfg: ServerConfig = loadConfig()): LucyApp {
   const db = openDb(cfg.dataDir);
   const app = new Hono() as LucyApp;
   app.db = db;
-
   const loginLimiter = makeRateLimiter(db, {
     max: cfg.loginRateMax,
     windowMs: cfg.loginRateWindowMs,
@@ -93,7 +95,7 @@ export function createApp(cfg: ServerConfig = loadConfig()): LucyApp {
   });
 
   // ── tools ──────────────────────────────────────────────────────────
-  mountTools(app, toolCtx);
+  app.handles = mountTools(app, toolCtx);
 
   // 未匹配任何路由 → 統一 JSON 404（L11）
   app.notFound((c) => c.json({ ok: false, error: "Not Found" }, 404));
@@ -125,6 +127,25 @@ const isDirectRun =
 if (isDirectRun || process.env.START_SERVER === "1") {
   const cfg = loadConfig();
   const app = createApp(cfg);
+
+  // graceful shutdown：pm2 restart/stop 送 SIGINT（kill -9 無法攔截，退化成放棄部位）
+  // binance 引擎先結算未平倉部位入資本（sync better-sqlite3 寫入，毫秒級）再退出
+  const settleTools = () => {
+    try {
+      for (const handle of Object.values(app.handles)) handle.settle?.();
+    } catch {
+      /* shutdown 路徑不拋錯 */
+    }
+  };
+  process.on("SIGINT", () => {
+    settleTools();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    settleTools();
+    process.exit(0);
+  });
+
   serve({ fetch: app.fetch, port: cfg.port, hostname: cfg.bindHost }, (info) => {
     console.log(
       `[lucy-server] listening on http://${cfg.bindHost}:${info.port} (data: ${cfg.dataDir}, trustProxy: ${cfg.trustProxy})`

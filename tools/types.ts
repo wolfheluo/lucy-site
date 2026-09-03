@@ -46,8 +46,14 @@ export interface ServerToolContext {
   trustProxy: boolean;
 }
 
+/** tool register 回傳的可選生命週期 handle（graceful shutdown 用） */
+export interface ServerToolHandle {
+  /** SIGINT / SIGTERM 前呼叫：引擎收工結算（如 binance 紙上部位） */
+  settle?: () => void;
+}
+
 export interface ServerToolModule {
   meta: ToolMeta;
-  /** 自行將路由掛到 app（可掛多前綴，例如 /api/tools/<id> 與 /s） */
-  register: (app: Hono, ctx: ServerToolContext) => void;
+  /** 自行將路由掛到 app（可掛多前綴，例如 /api/tools/<id> 與 /s）；可回傳生命週期 handle */
+  register: (app: Hono, ctx: ServerToolContext) => ServerToolHandle | void;
 }

@@ -118,6 +118,7 @@ export class BinanceMonitor {
   private readonly listeners = new Set<EngineListener>();
   private readonly stmtInsertForce: ReturnType<Db["prepare"]>;
   private readonly stmtInsertStrategy: ReturnType<Db["prepare"]>;
+  private readonly stmtUpsertState: ReturnType<Db["prepare"]>;
 
   constructor(options: EngineOptions) {
     this.db = options.db;
@@ -130,8 +131,17 @@ export class BinanceMonitor {
       ((url) => new WebSocket(url) as unknown as WsLike);
     this.ring = new Rolling1mStats(200_000, this.now);
 
+    // 資本持久化：DB 有先前 state → 續存（pm2 restart 不歸零）；無 → params 預設
+    const persisted = this.db
+      .prepare("SELECT capital FROM binance_engine_state WHERE id = 1")
+      .get() as { capital: number } | undefined;
+    const initialCapital =
+      persisted && Number.isFinite(persisted.capital) && persisted.capital > 0
+        ? persisted.capital
+        : this.params.initialCapital;
+
     this.strategy = new StrategyEngine({
-      initialCapital: this.params.initialCapital,
+      initialCapital,
       positionAllocation: this.params.positionAllocation,
       liquidationTakeProfit: this.params.liquidationTakeProfit,
       liquidationStopLoss: this.params.liquidationStopLoss,
@@ -142,6 +152,7 @@ export class BinanceMonitor {
       cvdConfirmationUpdates: this.params.cvdConfirmationUpdates,
       oppositeWallRatio: this.params.oppositeWallRatio,
       cvdSlowCount: this.params.cvdSlowCount,
+      cvdMinHoldMs: this.params.cvdMinHoldMs,
       cvdMaxHoldMs: this.params.cvdMaxHoldMs,
       cooldownMs: this.params.cooldownMs,
     });
@@ -157,6 +168,12 @@ export class BinanceMonitor {
           capital_before, capital_after, trigger_conditions)
        VALUES (@timestamp, @strategy, @action, @side, @price, @quantity, @pnl,
           @capital_before, @capital_after, @trigger_conditions)`
+    );
+    this.stmtUpsertState = this.db.prepare(
+      `INSERT INTO binance_engine_state (id, capital, updated_at)
+       VALUES (1, @capital, @updated_at)
+       ON CONFLICT(id) DO UPDATE SET
+         capital = excluded.capital, updated_at = excluded.updated_at`
     );
   }
 
@@ -193,6 +210,8 @@ export class BinanceMonitor {
 
   stop(): void {
     if (!this.running) return;
+    // 平倉收工：結算未平倉部位入資本並持久化（/stop 語意 = 平倉收工，start 後續跑不歸零）
+    this.settlePositions();
     this.running = false;
     this.connected = false;
     this.clearTimers();
@@ -517,6 +536,8 @@ export class BinanceMonitor {
       `[策略訊號] ${event.action} ${event.strategy} ${event.side} @ $${event.price.toFixed(1)} | ` +
         `數量: ${event.quantity.toFixed(6)} | 損益: ${sign}${event.pnl.toFixed(2)} USDT`
     );
+    // 資本唯一變動點 = EXIT（ENTRY 不扣錢）→ 落 DB 續存（restart 不歸零）
+    if (event.action === "EXIT") this.persistCapital();
   }
 
   // ── OI REST 輪詢（每 params.oiPollMs 秒）────────────────────────
@@ -582,6 +603,30 @@ export class BinanceMonitor {
         /* 單一 listener 出錯不拖垮其他 */
       }
     }
+  }
+
+  // ── 資本持久化 / graceful shutdown 結算 ─────────────────────────
+
+  /** 持久化目前紙上資本到 binance_engine_state（EXIT / settle 後呼叫） */
+  persistCapital(): void {
+    this.stmtUpsertState.run({
+      capital: this.strategy.capital,
+      updated_at: this.now(),
+    });
+  }
+
+  /**
+   * 強制結算所有未平倉部位（/stop 收工與 SIGINT graceful shutdown 共用）。
+   * 參考價：lastPrice → markPrice（無行情時退回 entryPrice，pnl 0）。
+   * EXIT 事件走 handleStrategyEvent 落 orders 表並持久化資本。
+   */
+  settlePositions(): StrategyOrderEvent[] {
+    const positions = this.strategy.positionList();
+    if (positions.length === 0) return [];
+    const refPrice = this.lastPrice > 0 ? this.lastPrice : this.markPrice;
+    const events = this.strategy.settleAll(refPrice, this.now());
+    for (const event of events) this.handleStrategyEvent(event);
+    return events;
   }
 
   // ── DB 寫入（測試也可直接呼叫驗證落庫）──────────────────────────

@@ -41,6 +41,8 @@ export interface BinanceParams {
   oppositeWallRatio: number;
   /** CVD 放緩連續次數 */
   cvdSlowCount: number;
+  /** cvd_breakout 最短持倉：hold < 此值期間只有 stop loss 能出場（輕量一致性） */
+  cvdMinHoldMs: number;
   /** CVD 順勢最長持有 ms */
   cvdMaxHoldMs: number;
   /** CVD 順勢停損（signed return，-0.005 = -0.5%；B-4） */

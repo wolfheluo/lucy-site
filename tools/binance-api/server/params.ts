@@ -19,6 +19,8 @@ export const DEFAULT_PARAMS: BinanceParams = {
   cvdConfirmationUpdates: 3,
   oppositeWallRatio: 0.65,
   cvdSlowCount: 3,
+  /** 輕量一致性：最短持倉 15s（期間只有 SL 能出場，擋深度牆/CVD 放緩秒退） */
+  cvdMinHoldMs: 15 * 1000,
   cvdMaxHoldMs: 15 * 60 * 1000,
   cvdStopLoss: -0.005,
   cooldownMs: 60 * 1000,

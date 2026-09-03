@@ -58,7 +58,10 @@ interface StrategyRowRaw {
   trigger_conditions: string;
 }
 
-export function registerBinanceApi(app: Hono, ctx: ServerToolContext): void {
+export function registerBinanceApi(
+  app: Hono,
+  ctx: ServerToolContext
+): { settle: () => void } {
   // 每個 Hono app 一個引擎；測試環境（vitest NODE_ENV=test）不自動連網
   // BQ_DEMO=1（e2e/版面測試）：注入 demo.ts 假行情——不連真實 Binance、UI 無標記
   const monitor = new BinanceMonitor({
@@ -176,4 +179,7 @@ export function registerBinanceApi(app: Hono, ctx: ServerToolContext): void {
   });
 
   app.route("/api/tools/binance-api", api);
+
+  // graceful shutdown handle：SIGINT / SIGTERM 前結算未平倉部位入資本（restart 續存）
+  return { settle: () => monitor.settlePositions() };
 }
