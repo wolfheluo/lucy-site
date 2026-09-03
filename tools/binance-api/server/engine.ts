@@ -565,10 +565,6 @@ export class BinanceMonitor {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    if (this.strategyTimer) {
-      clearInterval(this.strategyTimer);
-      this.strategyTimer = null;
-    }
     this.flushPending = false;
 
     const update: PanelUpdate = {
