@@ -27,6 +27,8 @@ export default function CustomCursor() {
     let ry = y;
     let hot = false;
     let raf = 0;
+    let prevX = x;
+    let prevY = y;
 
     const onMove = (e: PointerEvent) => {
       x = e.clientX;
@@ -43,8 +45,16 @@ export default function CustomCursor() {
     };
 
     const loop = () => {
-      rx += (x - rx) * 0.22;
-      ry += (y - ry) * 0.22;
+      const dx = x - prevX;
+      const dy = y - prevY;
+      prevX = x;
+      prevY = y;
+      // 速度感知 lerp：慢速 ~0.26（保留平滑拖尾質感），
+      // 快速移動時逼近 1（光圈即時咬住鼠標，不再落後）
+      const spd = Math.sqrt(dx * dx + dy * dy);
+      const k = Math.min(0.92, 0.26 + spd * 0.03);
+      rx += (x - rx) * k;
+      ry += (y - ry) * k;
       cross.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
       ring.style.transform = `translate3d(${rx}px, ${ry}px, 0) translate(-50%, -50%)`;
       raf = requestAnimationFrame(loop);
