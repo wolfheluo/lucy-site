@@ -254,7 +254,9 @@ export function ContactSec({ instant }: { instant: boolean }) {
           <p className="body-text" style={{ maxWidth: "52ch" }}>
             {contact.line}
           </p>
-          <p className="contact-note">{contact.note}</p>
+          <p className="contact-note" style={{ maxWidth: "52ch" }}>
+            {contact.note}
+          </p>
         </FadeIn>
         <FadeIn delay={0.14}>
           <a className="big-mail" href={`mailto:${contact.email}`} data-hover>
