@@ -18,7 +18,7 @@ export const about = {
   headingEn: "ABOUT",
   headingZh: "關於我",
   paragraphs: [
-    "你好，我是 <strong>野格</strong>。<br>平常沒事就在城市的資料流裡潛行。<strong>安靜、精準、不留痕跡</strong>。",
+    "HI，我是 <strong>野格</strong>。<br>平常沒事就在城市的資料流裡潛行。<strong>安靜、精準、不留痕跡</strong>。",
     "喜歡潛水、滑雪、徒步、電音、當然還有2077。<br>最近想去跳傘跟阿勒泰滑雪，那個藍調超美。",
 	"這裡是我在網路上的一小塊<span class=\"red\">自留地</span>，歡迎四處看看。",
   ],
