@@ -22,6 +22,26 @@
 
 ---
 
+## 修補狀態（2026-09-03，grill-me 定案後執行）
+
+| 項 | 決策 | 狀態 |
+|----|------|------|
+| C-1 XFF 繞 rate-limit | 修（CF-Connecting-IP 優先 + XFF 最右） | ✅ commit `ce609ef`，production 實測繞不過（第 11 次 429） |
+| M-1 share 列舉 | **不修**（使用者決策：4+4 不動，接受列舉殘餘風險） | — |
+| M-2 72h 自毀延遲 | 修（讀取路徑過期即時湮滅） | ✅ commit `3db6327`，production 實測過期即 404 |
+| M-3 share 碰撞 | **不修**（使用者決策：隨 4+4 一併接受） | — |
+| M-4 chunked 無上限 | **不修**（使用者決策） | — |
+| M-5 ambient 幽靈 BGM | 修（競爭時硬停舊元素） | ✅ commit `4a0578f`（聽覺驗證待使用者確認） |
+| M-6 ProgressBar rAF | **不修**（使用者決策） | — |
+| M-7 code rain 效能 | **不修**（使用者決策） | — |
+| M-8 client 401 鏈斷裂 | 修（XHR status + revoke catch） | ✅ commit `0179960`，jsdom 元件測試 2/2 |
+| M-9 >50 檔靜默丟棄 | 修（limits listener + client 擋） | ✅ commit `757b886`，51 檔測試過 |
+
+測試基線：45/45（新增 C-1×3、M-2×4、M-9×1、M-8×2）
+部署：`0179960` 已上 production；C-1/M-2 production 實測證實
+
+---
+
 ## 🔴 Critical
 
 ### C-1. TRUST_PROXY=1 時取 X-Forwarded-For 最左值 → rate-limit 可被任意偽造繞過
