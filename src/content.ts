@@ -9,7 +9,7 @@ export const profile = {
   altName: "野格", // 中文名或暱稱
   handle: "CYBER_SPACE", // 代號（出現在導覽 logo 與 footer）
   roleEn: "NETRUNNER // CYBERSECURITY", // Hero 英文職稱/定位
-  tagline: "在霓虹與數據的夾縫之間，我的露西終於有了屬於自己的月球。", // Hero 中文標語
+  tagline: "在霓虹與數據的夾縫之間，<br>我的露西終於有了屬於自己的月球。", // Hero 中文標語（可用 <br> 換行）
   bootOs: "NETRUNNER OS", // 載入畫面上的系統名稱
   bootVer: "v0.9.7 // DEEP-DIVE MODULE", // 載入畫面上的版本字樣
 };

@@ -71,7 +71,10 @@ export function Hero({ startDecode, instant }: { startDecode: boolean; instant: 
         {instant ? (
           <>
             <p className="hero-role">{profile.roleEn}</p>
-            <p className="hero-tag">{profile.tagline}</p>
+            <p
+              className="hero-tag"
+              dangerouslySetInnerHTML={{ __html: profile.tagline }}
+            />
           </>
         ) : (
           <>
@@ -88,9 +91,8 @@ export function Hero({ startDecode, instant }: { startDecode: boolean; instant: 
               initial={{ opacity: 0, y: 14 }}
               animate={startDecode ? { opacity: 1, y: 0 } : {}}
               transition={{ delay: 1.75, duration: 0.7, ease: "easeOut" }}
-            >
-              {profile.tagline}
-            </motion.p>
+              dangerouslySetInnerHTML={{ __html: profile.tagline }}
+            />
           </>
         )}
 
