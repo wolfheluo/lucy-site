@@ -368,6 +368,10 @@ export default function VaultUI({
               await refresh();
               setShareFor(null);
             }}
+            onUnauthorized={() => {
+              // M-8：session 過期 → 回鎖定畫面
+              onUnauthorizedRef.current();
+            }}
           />
         )}
       </AnimatePresence>
@@ -376,16 +380,18 @@ export default function VaultUI({
 }
 
 /* ---------------- ShareModal ---------------- */
-function ShareModal({
+export function ShareModal({
   file,
   rm,
   onClose,
   onRevoked,
+  onUnauthorized,
 }: {
   file: FileListItem;
   rm: boolean;
   onClose: () => void;
   onRevoked: () => void;
+  onUnauthorized: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -410,6 +416,15 @@ function ShareModal({
       await vaultApi.revoke(file.id);
       sfx.click();
       await onRevoked();
+    } catch (e) {
+      // M-8：401 → 回鎖定畫面；其餘錯誤明示失敗（避免 unhandled rejection
+      // 與「以為已撤銷」的假象）
+      if ((e as { status?: number }).status === 401) {
+        onUnauthorized();
+        return;
+      }
+      sfx.denied();
+      alert(`撤銷失敗：${(e as Error).message}`);
     } finally {
       setRevoking(false);
     }

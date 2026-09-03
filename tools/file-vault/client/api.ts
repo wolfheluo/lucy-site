@@ -79,7 +79,9 @@ export class VaultApi {
           const body = JSON.parse(xhr.responseText) as UploadResponse;
           if (xhr.status >= 400) {
             const msg = (body as { error?: string }).error ?? `HTTP ${xhr.status}`;
-            reject(new Error(msg));
+            const err = new Error(msg) as ApiError;
+            err.status = xhr.status; // M-8：XHR 路徑補上 status（與 fetch/j() 一致）
+            reject(err);
             return;
           }
           resolve(body);
