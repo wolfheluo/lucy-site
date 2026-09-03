@@ -1118,6 +1118,41 @@ a.pcard.clickable:hover { cursor: pointer; }
    ============================================================ */
 
 /* ---------- ToolShell：星塵背景 + 動態 CRT ---------- */
+/* ============================================================
+   tool-shell--lock：全貌鎖高（binance-api 專用）
+   - ≥981px：tool-shell 定高 100dvh + flex column，tool-body 吃掉剩餘高 → 整頁零滾動
+   - ≤980px：media 不套用 → 維持自然單欄滾動（class 無害）
+   - 視窗高 <600px：退讓自然滾動（換可讀性）
+   ============================================================ */
+@media (min-width: 981px) {
+  .tool-shell--lock {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .tool-shell--lock .tool-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 8px 2.2rem 0;
+  }
+}
+@media (max-height: 599px) and (min-width: 981px) {
+  .tool-shell--lock {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .tool-shell--lock .tool-body {
+    min-height: calc(100vh - 64px);
+    align-items: center;
+    justify-content: center;
+    padding: 4vh 6vw 8vh;
+  }
+}
+
 .tool-shell::before {
   content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1;
   background-image:

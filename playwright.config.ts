@@ -15,7 +15,8 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "rm -rf /tmp/lucy-e2e-data && VAULT_DATA_DIR=/tmp/lucy-e2e-data VAULT_LOGIN_RATE_MAX=100 npm run dev",
+    command:
+      "rm -rf /tmp/lucy-e2e-data && VAULT_DATA_DIR=/tmp/lucy-e2e-data VAULT_LOGIN_RATE_MAX=100 BQ_DEMO=1 npm run dev",
     url: "http://localhost:5173",
     reuseExistingServer: false,
     timeout: 60_000,

@@ -62,7 +62,8 @@ export default function ToolShell() {
   const Comp = tool.Component;
 
   return (
-    <div className="tool-shell">
+    // tool-shell--lock：binance-api 全貌鎖高（寬版整頁零滾動；CSS 見 index.css .tool-shell--lock）
+    <div className={`tool-shell${tool.meta.id === "binance-api" ? " tool-shell--lock" : ""}`}>
       <div className="fx-layer tool-fx" aria-hidden="true">
         <div className="scanlines" />
         <div className="scanbar" />

@@ -92,9 +92,9 @@ test.describe("file-vault 關鍵路徑", () => {
     await expect(page.locator(".vault-lock-title")).toBeVisible();
   });
 
-  test("首頁 Projects 區含 P-04 FILE VAULT 卡，可點入工具", async ({ page }) => {
+  test("首頁 Projects 區含 FILE VAULT 卡（P-02），可點入工具", async ({ page }) => {
     await page.goto("/");
-    const card = page.locator("a.pcard.clickable", { hasText: "P-04" });
+    const card = page.locator("a.pcard.clickable", { hasText: "P-02" });
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card.getByText("FILE VAULT")).toBeVisible();
     await card.scrollIntoViewIfNeeded();

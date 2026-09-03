@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import type { ServerToolContext } from "../../types.js";
 import { requireAuth } from "../../../server/auth.js";
 import { BinanceMonitor } from "./engine.js";
+import { createDemoSources } from "./demo.js";
 import type {
   ForceOrderRow,
   LiquidationListResponse,
@@ -59,7 +60,11 @@ interface StrategyRowRaw {
 
 export function registerBinanceApi(app: Hono, ctx: ServerToolContext): void {
   // 每個 Hono app 一個引擎；測試環境（vitest NODE_ENV=test）不自動連網
-  const monitor = new BinanceMonitor({ db: ctx.db });
+  // BQ_DEMO=1（e2e/版面測試）：注入 demo.ts 假行情——不連真實 Binance、UI 無標記
+  const monitor = new BinanceMonitor({
+    db: ctx.db,
+    ...(process.env.BQ_DEMO === "1" ? createDemoSources() : {}),
+  });
   if (process.env.NODE_ENV !== "test") monitor.start();
 
   const api = new Hono();
