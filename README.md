@@ -76,6 +76,20 @@ tests/e2e/               Playwright E2E（需要 POSIX shell，建議在 CI / WS
    nginx 反代建議：`proxy_pass http://127.0.0.1:3001;` 並設定
    `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`（同時 `.env` 設 `TRUST_PROXY=1`）。
 
+5. 常駐化（production 建議，避免 SSH 斷線 / 重開機後服務消失）：
+
+   ```bash
+   cp ecosystem.config.example.cjs ecosystem.config.cjs   # 編輯 cwd 為部署路徑
+   pm2 start ecosystem.config.cjs && pm2 save            # pm2 startup 開機自啟
+   ```
+
+   > 伺服器參數（密碼/密鑰/PORT/HOST/TRUST_PROXY）一律在 `.env`，ecosystem 只放
+   > `NODE_ENV` 與 `START_SERVER` 兩個啟動旗標（後者是 pm2 fork 包裝 argv[1] 的必要開關）。
+
+6. 既有伺服器的「增量推送」可用 `deploy.sh`（sandbox build → scp `dist/`+`dist-server/` → pm2 restart →
+   冒煙驗證）：`SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh`。它假設目標已照上述步驟建置過一次
+   （含 pm2 app 名 `lucy-site`）；全新機器請先走完 1–5。
+
 ## 設計細節
 
 - **色盤**：太空黑 `#07070b`、冰藍 `#a8e6ff`、冷白、粉紫 `#ff9fe5`、螢光紅 `#ff2e4d`（僅單分子線/警示用）。
