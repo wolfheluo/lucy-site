@@ -166,6 +166,40 @@ describe("cleanupExpired（時鐘注入）", () => {
   });
 });
 
+describe("讀取路徑即時湮滅（M-2，不需等待 cleanup）", () => {
+  it("get() 過期 → 回 null 且磁碟檔已刪", () => {
+    const v = makeVault(1000); // 1s 壽命
+    t = 50_000;
+    const f = seed(v, "late.txt");
+    t = 50_000 + 2000; // 過期但尚未 sweep
+    expect(v.get(f.id)).toBeNull();
+    expect(readdirSync(path.join(dir, "files")).length).toBe(0); // 已湮滅
+    expect(v.cleanupExpired()).toBe(0); // sweep 無事可做（兜底一致）
+  });
+
+  it("getByShareId() 過期 → 分享失效且 share 記錄清除", () => {
+    const v = makeVault(1000);
+    t = 60_000;
+    const f = seed(v, "exp-share.txt");
+    const s = v.createShare(f.id)!;
+    t = 60_000 + 2000; // 過期
+    expect(v.getByShareId(s.shareId)).toBeNull();
+    expect(v.get(f.id)).toBeNull();
+  });
+
+  it("list() 過濾並湮滅過期列", () => {
+    const v = makeVault(3600 * 1000);
+    t = 10_000;
+    const old = seed(v, "b-old.txt"); // 早建（壽命先到）
+    t = 30_000;
+    seed(v, "a-fresh.txt"); // 晚建（壽命未到）
+    t = 3_615_000; // old expire=3_610_000 已過、fresh expire=3_630_000 未過
+    const items = v.list();
+    expect(items.map((i) => i.originalName)).toEqual(["a-fresh.txt"]);
+    expect(v.get(old.id)).toBeNull();
+  });
+});
+
 describe("ensureOnDisk", () => {
   it("磁碟檔遺失 → 記錄清除", () => {
     const v = makeVault();

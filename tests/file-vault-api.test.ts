@@ -262,3 +262,38 @@ describe("file-vault 分享與公開下載", () => {
     expect(await page.text()).toContain("LINK EXPIRED");
   });
 });
+
+
+describe("72h 自毀讀取路徑（M-2：過期即時湮滅，不靠每小時 sweep）", () => {
+  it("分享連結過期 → GET/POST 404、DB 記錄與磁碟檔清除", async () => {
+    const cookie = await login();
+    const up = await upload(cookie, [{ name: "m2-expiry.txt", content: "expiry payload" }]);
+    const fid = up.json.files[0].file.id;
+    const share = (await (await createShare(cookie, fid)).json()).share;
+
+    // 直接改 DB 把 expire_time 推到過去（模擬到期、尚未 sweep）
+    app.db.prepare("UPDATE vault_files SET expire_time = ? WHERE id = ?").run(Date.now() - 5000, fid);
+
+    // 分享頁 GET → 404（過期即湮滅，不等待每小時 cleanup）
+    const getRes = await app.request(`/s/${share.shareId}`, {
+      headers: { "x-forwarded-for": "198.51.100.70" },
+    });
+    expect(getRes.status).toBe(404);
+
+    // PIN 下載 POST → 404
+    const postRes = await app.request(`/s/${share.shareId}`, {
+      method: "POST",
+      headers: { "x-forwarded-for": "198.51.100.70", "content-type": "application/x-www-form-urlencoded" },
+      body: `pin=${share.pin}`,
+    });
+    expect(postRes.status).toBe(404);
+
+    // 管理端：list 不再含、download 404
+    const listRes = await app.request("/api/tools/file-vault/files", { headers: authHeaders(cookie) });
+    const files = (await listRes.json()).files as { id: string }[];
+    expect(files.some((f) => f.id === fid)).toBe(false);
+
+    const dlRes = await app.request(`/api/tools/file-vault/download/${fid}`, { headers: authHeaders(cookie) });
+    expect(dlRes.status).toBe(404);
+  });
+});

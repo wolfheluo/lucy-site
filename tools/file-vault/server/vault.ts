@@ -3,7 +3,8 @@
 //  - 儲存隔離：實體檔名 = <uuid>.dat（副檔名無意義，防直接執行/路徑穿越）
 //  - 原始檔名只保留 basename，去除控制字元
 //  - 分享：share_id 4 小寫字母 + pin 4 位數（crypto，constant-time 驗證）
-//  - 自毀：expire_time 後由 cleanupExpired 刪除（now 可注入供測試）
+//  - 自毀：讀取路徑（get/getByShareId/list）發現過期即時湮滅；cleanupExpired 為兜底
+//    （now 可注入供測試）
 // =====================================================================
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -120,11 +121,28 @@ export class Vault {
     return `${crypto.randomUUID()}.dat`;
   }
 
-  get(id: string): VaultFile | null {
-    const row = this.db
+  private selectRow(id: string): Record<string, unknown> | undefined {
+    return this.db
       .prepare(`SELECT * FROM vault_files WHERE id = ?`)
       .get(id) as Record<string, unknown> | undefined;
-    return row ? this.rowToFile(row) : null;
+  }
+
+  /**
+   * 過期即時湮滅（M-2）：讀取路徑發現已過期 → 立即刪除（DB+磁碟檔），
+   * 回傳 null 視同不存在——不等待每小時 cleanup sweep。
+   */
+  private purgeIfExpired(rec: VaultFile): VaultFile | null {
+    if (rec.expireTime <= this.nowFn()) {
+      this.delete(rec.id);
+      return null;
+    }
+    return rec;
+  }
+
+  get(id: string): VaultFile | null {
+    const row = this.selectRow(id);
+    if (!row) return null;
+    return this.purgeIfExpired(this.rowToFile(row));
   }
 
   list(): FileListItem[] {
@@ -132,9 +150,15 @@ export class Vault {
       .prepare(`SELECT * FROM vault_files ORDER BY upload_time DESC`)
       .all() as Record<string, unknown>[];
     const now = this.nowFn();
-    return rows.map((r) => {
+    const out: FileListItem[] = [];
+    for (const r of rows) {
+      if ((r.expire_time as number) <= now) {
+        // 過期列即時湮滅，不列入清單
+        this.delete(r.id as string);
+        continue;
+      }
       const f = this.rowToFile(r);
-      return {
+      out.push({
         id: f.id,
         originalName: f.originalName,
         size: f.size,
@@ -142,13 +166,16 @@ export class Vault {
         expireTime: f.expireTime,
         ttlSec: Math.max(0, Math.round((f.expireTime - now) / 1000)),
         share: f.share,
-      };
-    });
+      });
+    }
+    return out;
   }
 
   delete(id: string): { ok: boolean; file?: VaultFile } {
-    const rec = this.get(id);
-    if (!rec) return { ok: false };
+    // 直接 raw select（不走 get/purgeIfExpired，避免過期刪除的遞迴）
+    const row = this.selectRow(id);
+    if (!row) return { ok: false };
+    const rec = this.rowToFile(row);
     this.db.prepare(`DELETE FROM vault_files WHERE id = ?`).run(id);
     try {
       fs.unlinkSync(this.filePath(rec.storedName));
@@ -194,7 +221,8 @@ export class Vault {
     const row = this.db
       .prepare(`SELECT * FROM vault_files WHERE share_id = ?`)
       .get(shareId) as Record<string, unknown> | undefined;
-    return row ? this.rowToFile(row) : null;
+    if (!row) return null;
+    return this.purgeIfExpired(this.rowToFile(row));
   }
 
   /** constant-time 驗證 pin */
