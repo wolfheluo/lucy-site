@@ -84,7 +84,7 @@
 /* ── 主網格 ────────────────────────────────────────────────── */
 .bq-grid {
   display: grid;
-  grid-template-columns: 1.18fr 1.32fr 340px;
+  grid-template-columns: 1fr 1fr 340px;
   grid-template-areas:
     "radar radar trades"
     "account matrix trades"
@@ -98,7 +98,7 @@
 .bq-trend { grid-area: trend; }
 .bq-trades { grid-area: trades; min-width: 0; }
 @media (max-width: 1500px) {
-  .bq-grid { grid-template-columns: 1.08fr 1.22fr 292px; }
+  .bq-grid { grid-template-columns: 1fr 1fr 292px; }
 }
 
 /* ── GRAPH CONTROL 雷達 ────────────────────────────────────── */
