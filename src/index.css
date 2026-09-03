@@ -1581,3 +1581,18 @@ a.pcard.clickable:hover { cursor: pointer; }
   margin-top: 1.4rem; font-family: var(--font-en); font-size: 0.75rem;
   letter-spacing: 0.4em; color: var(--faint);
 }
+/* 碎裂退場（2026-09 黑屏修復：CSS animation 保證播完 → animationend → state 移除；
+   不依賴 framer exit，黑幕不可能殘留） */
+.route-boot.exiting {
+  animation: routeBootRip 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes routeBootRip {
+  0%   { clip-path: inset(0 0 0 0);    opacity: 1; }
+  25%  { clip-path: inset(0 0 46% 0);  opacity: 1; }
+  45%  { clip-path: inset(0 0 0 0);    opacity: 0.7; }
+  70%  { clip-path: inset(52% 0 0 0);  opacity: 1; }
+  100% { clip-path: inset(0 0 100% 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-boot.exiting { animation: none; }
+}

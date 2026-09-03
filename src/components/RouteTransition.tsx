@@ -2,13 +2,23 @@
 //  RouteTransition：工具卡 → 工具頁的「深潛過場」
 //  - 點卡 → 全屏 NETRUNNER 讀取畫面（漸層 bar + 3 位 % + 模組名）
 //  - 進度滿 → navigate → overlay 碎裂退場露出工具頁
+//
+//  ⚠️ 退場鐵律（2026-09 黑屏修復）：碎裂動畫走 CSS animation +
+//     animationend 事件 + timeout 兜底，overlay 移除 = React state
+//     同步 unmount。**不再依賴 framer-motion AnimatePresence exit**
+//     （React 19 concurrent 時序下 exit 動畫曾卡住 → 黑幕 z-500 永久
+//     殘留 = 使用者回報的「進 FILE VAULT 黑屏、refresh 才恢復」）。
+//     結構保證：碎裂 animation 必播完 → animationend 必 fire →
+//     900ms timeout 二次保險 → onGone() setPending(null) → unmount。
 // =====================================================================
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
+  type AnimationEvent as ReactAnimationEvent,
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -35,10 +45,10 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
           <BootOverlay
             key={pending.path}
             title={pending.title}
-            onDone={() => {
-              navigate(pending.path);
-              setPending(null);
-            }}
+            // 進度滿當下先導航（新頁在 overlay 下 mount，碎裂後直接露出）
+            onLaunched={() => navigate(pending.path)}
+            // 碎裂 animationend / timeout 後才真正移除 overlay
+            onGone={() => setPending(null)}
           />
         )}
       </AnimatePresence>
@@ -47,13 +57,48 @@ export function TransitionProvider({ children }: { children: ReactNode }) {
 }
 
 /* ---------------- 過場讀取畫面 ---------------- */
-function BootOverlay({ title, onDone }: { title: string; onDone: () => void }) {
+function BootOverlay({
+  title,
+  onLaunched,
+  onGone,
+}: {
+  title: string;
+  onLaunched: () => void;
+  onGone: () => void;
+}) {
   const rm = useReducedMotion();
   const [pct, setPct] = useState(0);
+  const [exiting, setExiting] = useState(false);
+  const goneRef = useRef(false);
+  const launchedRef = useRef(false);
+
+  const gone = useCallback(() => {
+    if (goneRef.current) return;
+    goneRef.current = true;
+    onGone();
+  }, [onGone]);
+
+  // 碎裂 animation 播完（animationend）→ 移除；只認 routeBootRip
+  // （防未來子元素 animation bubble 造成提早移除）
+  const handleAnimEnd = useCallback(
+    (e: ReactAnimationEvent) => {
+      if (e.animationName === "routeBootRip") gone();
+    },
+    [gone]
+  );
+
+  // timeout 二次保險：animationend 任何原因沒 fire → 900ms 後強制移除
+  useEffect(() => {
+    if (!exiting) return;
+    const t = setTimeout(gone, 900);
+    return () => clearTimeout(t);
+  }, [exiting, gone]);
 
   useEffect(() => {
     if (rm === true) {
-      onDone();
+      // reduced-motion：不播碎裂，直接導航 + 移除（無黑幕）
+      onLaunched();
+      gone();
       return;
     }
     const t0 = performance.now();
@@ -66,33 +111,29 @@ function BootOverlay({ title, onDone }: { title: string; onDone: () => void }) {
       if (p < 1) {
         raf = requestAnimationFrame(tick);
       } else {
-        raf = requestAnimationFrame(() => onDone());
+        raf = requestAnimationFrame(() => {
+          // 進度滿：先導航（navigate 同步換 route），再觸發碎裂退場
+          if (!launchedRef.current) {
+            launchedRef.current = true;
+            onLaunched();
+          }
+          setExiting(true);
+        });
       }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [rm, onDone]);
+    // onLaunched/onGone 為 TransitionProvider 每次 render 的新 closure；
+    // 本 effect 只需跑一次（動畫自驅），刻意不列為依賴
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rm]);
 
   return (
     <motion.div
-      className="route-boot"
+      className={`route-boot${exiting ? " exiting" : ""}`}
       initial={rm === true ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={
-        rm === true
-          ? { opacity: 0 }
-          : {
-              clipPath: [
-                "inset(0 0 0 0)",
-                "inset(0 0 46% 0)",
-                "inset(0 0 0 0)",
-                "inset(52% 0 0 0)",
-                "inset(0 0 100% 0)",
-              ],
-              opacity: [1, 1, 0.7, 1, 0],
-              transition: { duration: 0.42, times: [0, 0.25, 0.45, 0.7, 1] },
-            }
-      }
+      onAnimationEnd={handleAnimEnd}
       aria-hidden="true"
     >
       <div className="route-boot-inner">
