@@ -594,7 +594,11 @@
    ══════════════════════════════════════════════════════════════ */
 @media (min-width: 981px) {
   .bq {
-    flex: 1 1 auto; /* 水平拉滿 tool-body（grid 填滿全寬才置中；勿只靠 stretch——那只管垂直） */
+    /* 寬度 = tool-body 可用寬 80%（隨視窗縮放），justify-content:center 置中
+       → 兩側留白對稱；勿 flex-grow 否則又頂滿（2026-09 使用者：雷達/四卡打 8 折） */
+    flex: 0 1 auto;
+    width: 80%;
+    max-width: 1600px;
     min-width: 0;
     min-height: 0;
   }
