@@ -344,14 +344,12 @@ export default function BinanceApiPage() {
   const [hist, setHist] = useState<HistPoint[]>([]);
   const [nowTick, setNowTick] = useState(0);
   const [tapeRows, setTapeRows] = useState<TapeRow[]>([]);
-  const [tapeFrozen, setTapeFrozen] = useState(false);
 
   const histRef = useRef<HistPoint[]>([]);
   const flashSeq = useRef(1);
   const tapeBuf = useRef<TapeRow[]>([]);
   const tapeSeq = useRef(1);
   const tapeRaf = useRef(0);
-  const tapeHover = useRef(false);
 
   const pushLedger = (row: Omit<LedgerRow, "id">) =>
     setLedger((prev) => {
@@ -382,7 +380,7 @@ export default function BinanceApiPage() {
     if (tapeRaf.current) return;
     tapeRaf.current = requestAnimationFrame(() => {
       tapeRaf.current = 0;
-      if (!tapeHover.current) flushTape();
+      flushTape();
     });
   };
   const pushTrades = (list: Array<{ t: number; p: number | string; q: number | string; m: boolean | string }>) => {
@@ -397,11 +395,6 @@ export default function BinanceApiPage() {
     }
     if (buf.length > TAPE_BUF) buf.length = TAPE_BUF;
     scheduleTapeFlush();
-  };
-  const setTapeHover = (h: boolean) => {
-    tapeHover.current = h;
-    setTapeFrozen(h);
-    if (!h) flushTape(); // 移開瞬間補上凍結期間累積的行
   };
 
   // ── 初始：state + auth + BOOT ledger ────────────────────────
@@ -823,33 +816,21 @@ export default function BinanceApiPage() {
         </section>
 
         {/* ── TAPE TRADES（最右直欄成交流）────────────────── */}
-        <TradesTape rows={tapeRows} frozen={tapeFrozen} onHover={setTapeHover} />
+        <TradesTape rows={tapeRows} />
       </div>
     </div>
   );
 }
 
 /* ── 小元件 ─────────────────────────────────────────────────── */
-function TradesTape({
-  rows,
-  frozen,
-  onHover,
-}: {
-  rows: TapeRow[];
-  frozen: boolean;
-  onHover: (h: boolean) => void;
-}) {
+function TradesTape({ rows }: { rows: TapeRow[] }) {
   return (
-    <section
-      className={`bq-mod bq-trades${frozen ? " frozen" : ""}`}
-      onMouseEnter={() => onHover(true)}
-      onMouseLeave={() => onHover(false)}
-    >
+    <section className="bq-mod bq-trades">
       <div className="bq-mod-head">
         <span>TAPE TRADES — EXECUTION STREAM</span>
         <span className="hd-right">
-          <span className={`hd-dot ${frozen ? "" : "ok"}`} />
-          {frozen ? "⏸ FREEZE" : "LIVE"}
+          <span className="hd-dot ok" />
+          LIVE
         </span>
       </div>
       <div className="bq-trades-body">

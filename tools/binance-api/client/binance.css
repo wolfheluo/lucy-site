@@ -521,8 +521,6 @@
   min-height: 0;
   overflow: hidden;
 }
-.bq-trades.frozen .bq-trades-body { opacity: 0.55; }
-.bq-trades.frozen .hd-dot { background: var(--bq-warn); box-shadow: 0 0 8px var(--bq-warn); }
 .bq-trades-body {
   flex: 1;
   min-height: 0;

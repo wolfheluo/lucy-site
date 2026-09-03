@@ -68,7 +68,8 @@ describe("BinanceMonitor 引擎節拍（回歸：flushNow 不得清除策略節�
       );
       // 真實等待 >15s：策略節拍每秒 sample，樣本跨 15s 窗後 priceMove15sPct 必須有值
       // （若 flushNow 誤殺節拍 timer → 樣本永不累積 → 永遠 null → 失敗）
-      await new Promise((r) => setTimeout(r, 17_500));
+      // 21s：容忍並行測試負載下 interval 的輕微延遲（<15 tick 會假陰性）
+      await new Promise((r) => setTimeout(r, 21_000));
 
       const st = mon.snapshotState();
       console.log("[engine-test] tick 呼叫次數:", spy.mock.calls.length, "| move:", st.priceMove15sPct);
