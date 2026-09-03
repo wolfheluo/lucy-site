@@ -84,7 +84,8 @@ export const projects = {
 export const contact = {
   headingEn: "CONTACT",
   headingZh: "聯絡",
-  line: "歡迎交流技術、找旅遊/吃飯搭子或純聊聊月球——我的頻道永遠開啟。",
+  line: "歡迎交流技術、找旅遊/吃飯搭子或純聊聊月球",
+  note: "——我的頻道永遠開啟。", // 第二行（靠右）
   email: "gm900411@gmail.com", // 主要聯絡信箱
   socials: [
     { label: "GITHUB", href: "https://github.com/wolfheluo" },
