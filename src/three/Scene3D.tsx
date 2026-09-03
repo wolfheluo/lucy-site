@@ -174,6 +174,7 @@ function CameraRig() {
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return; // touch 滾動不更新視差（防月球跟手晃）
       state.current.mouse.set(
         (e.clientX / window.innerWidth) * 2 - 1,
         -((e.clientY / window.innerHeight) * 2 - 1)

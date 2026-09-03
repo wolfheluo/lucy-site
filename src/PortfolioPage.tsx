@@ -6,7 +6,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "
 import { AnimatePresence } from "framer-motion";
 // M9：3D 場景（three / drei / postprocessing）獨立 chunk，首載不阻塞
 const Scene3D = lazy(() => import("./three/Scene3D"));
-import { supportsWebGL, useCoarsePointer, useMediaQuery, usePrefersReducedMotion } from "./hooks";
+import { supportsWebGL, useCoarsePointer, usePrefersReducedMotion } from "./hooks";
 import { profile } from "./content";
 import { sfx } from "./audio/engine";
 import BootScreen from "./components/BootScreen";
@@ -29,8 +29,6 @@ class SceneBoundary extends Component<{ fallback: ReactNode; children: ReactNode
 export default function PortfolioPage() {
   const reduced = usePrefersReducedMotion();
   const coarse = useCoarsePointer();
-  const narrow = useMediaQuery("(max-width: 900px)");
-  const mobile = coarse || narrow;
 
   const [webglOk, setWebglOk] = useState(true);
   const [booted, setBooted] = useState(reduced);
@@ -51,7 +49,9 @@ export default function PortfolioPage() {
     return () => sfx.stopAmbient();
   }, []);
 
-  const useCanvas = webglOk && !mobile && !reduced;
+  // 2026-09 使用者決策：手機直接開完整 3D（貼圖月球）——不再 2D 降級；
+  // 低階機若卡頓再考慮 Scene3D 精簡 profile（webgl 失敗/reduced 仍走 fallback）
+  const useCanvas = webglOk && !reduced;
 
   const toggleAmb = () => {
     if (ambOn) {
