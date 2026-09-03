@@ -222,14 +222,29 @@ class SoundEngine {
     return this.music !== null;
   }
 
+  /** fade-out 尚未完成的舊元素（M-5：重啟時需硬停，避免幽靈 BGM） */
+  private fadingOut: HTMLAudioElement | null = null;
+
   /** loop the homepage BGM (off by default) */
   startAmbient() {
     if (typeof window === "undefined" || this.music) return;
+    // M-5：上一次 stop 的 fade-out 未完就重啟 → 硬停舊元素並清 fade timer，
+    // 否則舊元素 fade 被中斷後停在非零音量、失去參照繼續 loop（幽靈 BGM）
+    if (this.fadingOut) {
+      if (this.musicFadeTimer) window.clearInterval(this.musicFadeTimer);
+      this.musicFadeTimer = null;
+      const old = this.fadingOut;
+      this.fadingOut = null;
+      old.pause();
+      old.currentTime = 0;
+    }
     const music = new Audio("/bgm.mp3");
     music.loop = true;
     music.volume = 0;
     this.music = music;
     void music.play().then(() => {
+      // M-5：play 延遲 resolve 期間若已被 stop（this.music 換人）→ 不再 fade-in
+      if (this.music !== music) return;
       this.fadeMusic(music, this.muted ? 0 : 0.16, 1200);
     });
   }
@@ -238,7 +253,9 @@ class SoundEngine {
     if (!this.music) return;
     const music = this.music;
     this.music = null;
+    this.fadingOut = music;
     this.fadeMusic(music, 0, 700, () => {
+      if (this.fadingOut === music) this.fadingOut = null;
       music.pause();
       music.currentTime = 0;
     });
