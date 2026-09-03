@@ -179,7 +179,7 @@ function drawRadarFrame(
   const H = canvas.clientHeight;
   ctx.clearRect(0, 0, W, H);
   if (W < 60 || H < 60) return;
-  const cx = W * 0.47;
+  const cx = W * 0.5;
   const cy = H * 0.5;
   const R = Math.min(W * 0.34, H * 0.42);
   if (R < 30) return;
@@ -289,8 +289,12 @@ function drawRadarFrame(
   ctx.fill();
 
   // ── 事件爆閃（3s 淡出）──
+  // age 必須與 pushFlash 的 at（Date.now()）同基準——rAF nowMs 是
+  // performance.now()（頁面生命週期起算），混用會讓 age 恆負 → arc 半徑負
+  // → IndexSizeError，flash 期間雷達整段繪製中斷（2026-09 實戰發現）
+  const flashNow = Date.now();
   for (const f of p.flashes) {
-    const age = (nowMs - f.at) / 1000;
+    const age = (flashNow - f.at) / 1000;
     if (age > 3) continue;
     const a = 1 - age / 3;
     const ang = -Math.PI / 2 + (f.id % 6) * ((Math.PI * 2) / 6); // 依序落在六軸方向軌道

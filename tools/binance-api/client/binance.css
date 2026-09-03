@@ -84,7 +84,7 @@
 /* ── 主網格 ────────────────────────────────────────────────── */
 .bq-grid {
   display: grid;
-  grid-template-columns: 1.42fr 1fr 300px;
+  grid-template-columns: 1.18fr 1.32fr 340px;
   grid-template-areas:
     "radar radar trades"
     "account matrix trades"
@@ -98,7 +98,7 @@
 .bq-trend { grid-area: trend; }
 .bq-trades { grid-area: trades; min-width: 0; }
 @media (max-width: 1500px) {
-  .bq-grid { grid-template-columns: 1.3fr 1fr 252px; }
+  .bq-grid { grid-template-columns: 1.08fr 1.22fr 292px; }
 }
 
 /* ── GRAPH CONTROL 雷達 ────────────────────────────────────── */
@@ -594,7 +594,8 @@
    ══════════════════════════════════════════════════════════════ */
 @media (min-width: 981px) {
   .bq {
-    height: 100%;
+    flex: 1 1 auto; /* 水平拉滿 tool-body（grid 填滿全寬才置中；勿只靠 stretch——那只管垂直） */
+    min-width: 0;
     min-height: 0;
   }
   .bq-grid {
