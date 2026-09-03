@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -21,3 +21,41 @@ jobs:
 
       - name: Run vitest
         run: npm test
+
+  # 部署：僅 main push（非 PR）→ 測試過才執行
+  # secrets（DEPLOY_SSH_KEY / DEPLOY_SERVER / SMOKE_PASSWORD）由 repo 設定，
+  # fork 的 PR 無權限讀取 → 只有 maintainer push 才會觸發部署
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (client + server)
+        run: npm run build
+
+      - name: Prepare deploy SSH key
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          HOST="${DEPLOY_SERVER##*@}"
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy via deploy.sh
+        env:
+          SERVER: ${{ secrets.DEPLOY_SERVER }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: bash ./deploy.sh
