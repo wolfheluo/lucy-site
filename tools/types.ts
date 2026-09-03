@@ -42,6 +42,8 @@ export interface ServerToolContext {
   adminPassword: string;
   /** HMAC 簽名密鑰（session cookie 用） */
   sessionSecret: string;
+  /** 是否信任上層代理的 X-Forwarded-For（H3，由 env TRUST_PROXY 決定） */
+  trustProxy: boolean;
 }
 
 export interface ServerToolModule {

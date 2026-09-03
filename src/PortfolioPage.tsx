@@ -2,10 +2,12 @@
 //  PortfolioPage：作品集首頁（原 App 內容）
 //  boot / 3D 場景 / 內容段落 / HUD / CRT / 游標 —— 全部保留原樣
 // =====================================================================
-import { Component, useEffect, useState, type ReactNode } from "react";
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
-import Scene3D from "./three/Scene3D";
+// M9：3D 場景（three / drei / postprocessing）獨立 chunk，首載不阻塞
+const Scene3D = lazy(() => import("./three/Scene3D"));
 import { supportsWebGL, useCoarsePointer, useMediaQuery, usePrefersReducedMotion } from "./hooks";
+import { profile } from "./content";
 import { sfx } from "./audio/engine";
 import BootScreen from "./components/BootScreen";
 import CustomCursor from "./components/CustomCursor";
@@ -35,9 +37,10 @@ export default function PortfolioPage() {
   const [fxOn, setFxOn] = useState(true);
   const [ambOn, setAmbOn] = useState(false);
 
-  // 從工具頁返回時回到頂端
+  // 從工具頁返回時回到頂端，並復原主站標題（L5）
   useEffect(() => {
     window.scrollTo(0, 0);
+    document.title = `${profile.name} // ${profile.roleEn.split(" ")[0]}`;
   }, []);
 
   useEffect(() => {
@@ -65,7 +68,9 @@ export default function PortfolioPage() {
       {useCanvas ? (
         <div className="scene">
           <SceneBoundary fallback={<FallbackBackdrop />}>
-            <Scene3D />
+            <Suspense fallback={<FallbackBackdrop />}>
+              <Scene3D />
+            </Suspense>
           </SceneBoundary>
         </div>
       ) : (

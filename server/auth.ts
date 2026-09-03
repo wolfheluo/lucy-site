@@ -49,16 +49,16 @@ export function verifySession(secret: string, token: string | undefined): Sessio
   }
 }
 
-/** 驗證密碼（constant-time） */
+/** 驗證密碼（constant-time）；兩者皆空時 timingSafeEqual 會 throw，先以長度擋掉 */
 export function checkPassword(actual: string, input: string): boolean {
   const a = Buffer.from(actual);
   const b = Buffer.from(input);
-  if (a.length !== b.length) return false;
+  if (a.length === 0 || a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
 
-/** 登入成功後設定 cookie */
-export function issueSession(c: Context, secret: string): void {
+/** 登入成功後設定 cookie（secure 由 config 統一決定，L1） */
+export function issueSession(c: Context, secret: string, secure: boolean): void {
   const payload: SessionPayload = {
     v: 1,
     at: Date.now(),
@@ -67,7 +67,7 @@ export function issueSession(c: Context, secret: string): void {
   setCookie(c, AUTH_COOKIE, signSession(secret, payload), {
     httpOnly: true,
     sameSite: "Lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: SESSION_TTL_MS / 1000,
   });

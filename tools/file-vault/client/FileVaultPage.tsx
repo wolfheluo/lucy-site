@@ -45,6 +45,7 @@ export default function FileVaultPage() {
       onLogout={() => {
         void vaultApi.logout().finally(() => setPhase("locked"));
       }}
+      onUnauthorized={() => setPhase("locked")}
     />
   );
 }

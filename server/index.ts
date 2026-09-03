@@ -2,6 +2,7 @@
 //  lucy-site server 入口
 //  - createApp(config)：建立 Hono app（測試可直接 app.request()）
 //  - 直接執行時 listen（tsx server/index.ts / node dist-server/server/index.js）
+//  - LucyApp = Hono + db：測試可於 afterAll 關閉 SQLite（M1）
 // =====================================================================
 import fs from "node:fs";
 import path from "node:path";
@@ -9,11 +10,10 @@ import { pathToFileURL } from "node:url";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
-import { getConnInfo } from "@hono/node-server/conninfo";
-import type { Context } from "hono";
 
 import { loadConfig, type ServerConfig } from "./config.js";
-import { openDb } from "./db.js";
+import { openDb, type Db } from "./db.js";
+import { clientIp } from "./request-ip.js";
 import {
   checkPassword,
   clearSession,
@@ -23,25 +23,18 @@ import {
 import { makeRateLimiter } from "./rate-limit.js";
 import { mountTools } from "./registry.js";
 
-/**
- * 解析 client IP：
- *  - node server 只 listen 127.0.0.1（nginx 反代），故 X-Forwarded-For 可信
- *  - 測試環境（純 app.request）無 conninfo → fallback "unknown"
- */
-export function clientIp(c: Context): string {
-  const xff = c.req.header("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  try {
-    const info = getConnInfo(c);
-    return info.remote.address ?? "unknown";
-  } catch {
-    return "unknown";
-  }
+/** Hono app + 共享 SQLite 實例（M1：測試結束可 db.close()） */
+export interface LucyApp extends Hono {
+  db: Db;
 }
 
-export function createApp(cfg: ServerConfig = loadConfig()): Hono {
+/** 公開端 body 上限（H4：login / pin 皆為小型表單，超限直接 413） */
+const MAX_FORM_BODY = 64 * 1024;
+
+export function createApp(cfg: ServerConfig = loadConfig()): LucyApp {
   const db = openDb(cfg.dataDir);
-  const app = new Hono();
+  const app = new Hono() as LucyApp;
+  app.db = db;
 
   const loginLimiter = makeRateLimiter(db, {
     max: cfg.loginRateMax,
@@ -53,6 +46,7 @@ export function createApp(cfg: ServerConfig = loadConfig()): Hono {
     dataDir: cfg.dataDir,
     adminPassword: cfg.adminPassword,
     sessionSecret: cfg.sessionSecret,
+    trustProxy: cfg.trustProxy,
   };
 
   // ── health ─────────────────────────────────────────────────────────
@@ -60,14 +54,21 @@ export function createApp(cfg: ServerConfig = loadConfig()): Hono {
 
   // ── admin auth ─────────────────────────────────────────────────────
   app.post("/api/auth/login", async (c) => {
-    const ip = clientIp(c);
+    const ip = clientIp(c, cfg.trustProxy);
     const key = `login:${ip}`;
     const status = loginLimiter.hit(key);
     if (!status.allowed) {
+      // L8：標準 Retry-After header
+      c.header("Retry-After", String(status.retryAfterSec));
       return c.json(
         { ok: false, error: "嘗試次數過多，請稍後再試", retryAfterSec: status.retryAfterSec },
         429
       );
+    }
+    // H4：避免超大 body 被 c.req.json() 整包讀入記憶體
+    const contentLen = Number(c.req.header("content-length") ?? 0);
+    if (contentLen > MAX_FORM_BODY) {
+      return c.json({ ok: false, error: "請求內容過大" }, 413);
     }
     const body = await c.req.json().catch(() => null);
     const password = typeof body?.password === "string" ? body.password : "";
@@ -77,7 +78,7 @@ export function createApp(cfg: ServerConfig = loadConfig()): Hono {
         401
       );
     }
-    issueSession(c, cfg.sessionSecret);
+    issueSession(c, cfg.sessionSecret, cfg.cookieSecure);
     return c.json({ ok: true });
   });
 
@@ -93,6 +94,9 @@ export function createApp(cfg: ServerConfig = loadConfig()): Hono {
 
   // ── tools ──────────────────────────────────────────────────────────
   mountTools(app, toolCtx);
+
+  // 未匹配任何路由 → 統一 JSON 404（L11）
+  app.notFound((c) => c.json({ ok: false, error: "Not Found" }, 404));
 
   // ── production：靜態 dist + SPA fallback ─────────────────────────
   if (cfg.distDir && fs.existsSync(cfg.distDir)) {
@@ -121,7 +125,9 @@ const isDirectRun =
 if (isDirectRun || process.env.START_SERVER === "1") {
   const cfg = loadConfig();
   const app = createApp(cfg);
-  serve({ fetch: app.fetch, port: cfg.port }, (info) => {
-    console.log(`[lucy-server] listening on http://0.0.0.0:${info.port} (data: ${cfg.dataDir})`);
+  serve({ fetch: app.fetch, port: cfg.port, hostname: cfg.bindHost }, (info) => {
+    console.log(
+      `[lucy-server] listening on http://${cfg.bindHost}:${info.port} (data: ${cfg.dataDir}, trustProxy: ${cfg.trustProxy})`
+    );
   });
 }

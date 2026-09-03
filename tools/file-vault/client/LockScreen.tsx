@@ -174,9 +174,10 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
       setLeaving(true);
       window.setTimeout(onUnlocked, rm === true ? 0 : 640);
     } catch (err) {
-      const e2 = err as Error & { status?: number };
+      const e2 = err as Error & { status?: number; retryAfterSec?: number };
       if (e2.status === 429) {
-        const sec = Number(/(\d+)/.exec(e2.message)?.[1] ?? 60);
+        // M4：直接用 server 的 retryAfterSec（不再 regex 解析人類可讀訊息）
+        const sec = e2.retryAfterSec ?? 60;
         setState({ kind: "locked", retryAfterSec: Math.max(1, sec) });
       } else {
         setState({ kind: "error", message: "ACCESS DENIED // 密碼錯誤" });

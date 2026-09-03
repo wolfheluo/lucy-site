@@ -19,6 +19,7 @@ function cfg() {
     VAULT_ADMIN_PASSWORD: PASSWORD,
     VAULT_SESSION_SECRET: "test-secret",
     NODE_ENV: "test",
+    TRUST_PROXY: "1", // 測試以 X-Forwarded-For 模擬不同來源 IP
   } as NodeJS.ProcessEnv);
 }
 
@@ -67,6 +68,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  app.db.close(); // M1：先關閉 SQLite 才能刪 temp 目錄（Windows EPERM）
   rmSync(dataDir, { recursive: true, force: true });
 });
 

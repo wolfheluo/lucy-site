@@ -15,7 +15,13 @@ import { curlCommand, fmtSize, fmtTtl, shareUrl, ttlUrgent } from "./util";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
-export default function VaultUI({ onLogout }: { onLogout: () => void }) {
+export default function VaultUI({
+  onLogout,
+  onUnauthorized,
+}: {
+  onLogout: () => void;
+  onUnauthorized: () => void;
+}) {
   const [files, setFiles] = useState<FileListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => Date.now());
@@ -29,24 +35,33 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
   const dragDepth = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevIds = useRef<string[] | null>(null);
+  const flashTimer = useRef<number | null>(null);
   const rm = useReducedMotion();
+
+  // M5：用 ref 保存最新 callback，避免因 parent inline props 造成 effect/useCallback 重建
+  const onUnauthorizedRef = useRef(onUnauthorized);
+  useEffect(() => {
+    onUnauthorizedRef.current = onUnauthorized;
+  }, [onUnauthorized]);
 
   const refresh = useCallback(async () => {
     try {
       const next = await vaultApi.list();
-      setFiles((prev) => {
-        // 偵測「新出現」的檔（上傳完成/他人操作）→ flash
-        const oldIds = prevIds.current ?? prev.map((f) => f.id);
+      // M6：計算與 side-effect 移到 updater 外（updater 必須 pure）
+      const oldIds = prevIds.current;
+      if (oldIds) {
         const fresh = next.filter((f) => !oldIds.includes(f.id)).map((f) => f.id);
         if (fresh.length > 0) {
           setFlashIds(new Set(fresh));
-          window.setTimeout(() => setFlashIds(new Set()), 1400);
+          if (flashTimer.current) window.clearTimeout(flashTimer.current);
+          flashTimer.current = window.setTimeout(() => setFlashIds(new Set()), 1400);
         }
-        prevIds.current = next.map((f) => f.id);
-        return next;
-      });
-    } catch {
-      /* session 失效由上層處理 */
+      }
+      prevIds.current = next.map((f) => f.id);
+      setFiles(next);
+    } catch (e) {
+      // M5：session 失效 → 回鎖定畫面；其餘錯誤保留畫面
+      if ((e as { status?: number }).status === 401) onUnauthorizedRef.current();
     } finally {
       setLoading(false);
     }
@@ -77,6 +92,11 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
         else sfx.denied();
         await refresh();
       } catch (e) {
+        // M5：session 失效 → 回鎖定畫面
+        if ((e as { status?: number }).status === 401) {
+          onUnauthorizedRef.current();
+          return;
+        }
         setUploadErr((e as Error).message);
         sfx.denied();
       } finally {
@@ -93,6 +113,14 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       await vaultApi.remove(f.id);
       sfx.click();
       await refresh();
+    } catch (e) {
+      // M5：401 → 回鎖定畫面；其餘錯誤顯示訊息（避免 unhandled rejection）
+      if ((e as { status?: number }).status === 401) {
+        onUnauthorizedRef.current();
+        return;
+      }
+      sfx.denied();
+      alert((e as Error).message);
     } finally {
       setBusyId(null);
     }
@@ -107,6 +135,11 @@ export default function VaultUI({ onLogout }: { onLogout: () => void }) {
       setShareFor(updated);
       sfx.ping();
     } catch (e) {
+      // M5：session 失效 → 回鎖定畫面
+      if ((e as { status?: number }).status === 401) {
+        onUnauthorizedRef.current();
+        return;
+      }
       sfx.denied();
       alert((e as Error).message);
     } finally {

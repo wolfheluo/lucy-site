@@ -5,6 +5,8 @@ import type { FileListItem, ShareInfo, UploadResponse } from "../types";
 
 export type { FileListItem, ShareInfo, UploadResponse };
 
+export type ApiError = Error & { status?: number; retryAfterSec?: number };
+
 const BASE = "/api/tools/file-vault";
 
 async function j<T>(res: Response): Promise<T> {
@@ -19,8 +21,11 @@ async function j<T>(res: Response): Promise<T> {
       body && typeof body === "object" && "error" in body
         ? String((body as { error: unknown }).error)
         : `HTTP ${res.status}`;
-    const err = new Error(msg) as Error & { status?: number };
+    const err = new Error(msg) as ApiError;
     err.status = res.status;
+    // M4：把 server 的 retryAfterSec 一起帶回，供 LockScreen 精準倒數
+    const retryAfterSec = (body as { retryAfterSec?: unknown }).retryAfterSec;
+    if (typeof retryAfterSec === "number") err.retryAfterSec = retryAfterSec;
     throw err;
   }
   return body as T;

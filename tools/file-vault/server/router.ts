@@ -19,11 +19,13 @@ import { Hono } from "hono";
 import type { ServerToolContext } from "../../types.js";
 import { requireAuth } from "../../../server/auth.js";
 import { makeRateLimiter } from "../../../server/rate-limit.js";
+import { clientIp } from "../../../server/request-ip.js";
 import { Vault } from "./vault.js";
 import { fmtSize, sharePageHtml } from "./share-page.js";
 import type { UploadResultItem } from "../types.js";
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024; // 2GB（與 nginx client_max_body_size 一致）
+const MAX_FORM_BODY = 64 * 1024; // H4：公開 pin 表單上限（避免 parseBody 整包讀入記憶體）
 const PIN_RATE_MAX = 10;
 const PIN_RATE_WINDOW_MS = 15 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = 3600 * 1000; // 每小時
@@ -73,12 +75,21 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     if (!ct.toLowerCase().includes("multipart/form-data")) {
       return c.json({ ok: false, error: "需要 multipart/form-data" }, 400);
     }
+    // H4：Content-Length 可判時先擋掉超大請求（chunked 無長度者仍由 busboy fileSize 兜底）
+    const contentLen = Number(c.req.header("content-length") ?? 0);
+    if (contentLen > MAX_UPLOAD_BYTES) {
+      return c.json({ ok: false, error: "上傳內容過大" }, 413);
+    }
     const bb = busboy({
       headers: { "content-type": ct },
-      limits: { fileSize: MAX_UPLOAD_BYTES, files: 50 },
+      // H5：不收任何欄位、限制總 part 數；fileSize 為單檔上限
+      limits: { fileSize: MAX_UPLOAD_BYTES, files: 50, fields: 0, parts: 50 },
       defParamCharset: "utf8", // 中文檔名正確解碼（預設 latin1 會 mojibake）
     });
     const results: UploadResultItem[] = [];
+    /** 本次 request 建立的所有實體檔（M3：未成功 register 的於結束時一併清除） */
+    const writtenStores: string[] = [];
+    const registeredStores = new Set<string>();
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -91,25 +102,18 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
         bb.on("file", (_name, stream, info) => {
           pending++;
           const stored = vault.newStoredName();
+          writtenStores.push(stored);
           const dest = vault.filePath(stored);
           const ws = fs.createWriteStream(dest);
           let size = 0;
           let truncated = false;
           let failed: string | null = null;
+          let finalized = false;
 
-          stream.on("data", (chunk: Buffer) => {
-            size += chunk.length;
-          });
-          stream.on("limit", () => {
-            truncated = true;
-          });
-          stream.on("error", (e: Error) => {
-            failed = e.message;
-          });
-          ws.on("error", (e: Error) => {
-            failed = e.message;
-          });
-          ws.on("finish", () => {
+          // 每檔只結算一次：finish 或任一 error 皆走這裡，避免 promise 永不 resolve
+          const finalize = () => {
+            if (finalized) return;
+            finalized = true;
             pending--;
             try {
               if (failed) {
@@ -122,6 +126,7 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
                   size,
                   storedName: stored,
                 });
+                registeredStores.add(stored);
                 results.push({ ok: true, file: rec });
               }
             } catch (e) {
@@ -136,7 +141,26 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
               }
             }
             maybeDone();
+          };
+
+          stream.on("data", (chunk: Buffer) => {
+            size += chunk.length;
           });
+          stream.on("limit", () => {
+            truncated = true;
+          });
+          stream.on("error", (e: Error) => {
+            // 來源串流出錯：中斷寫入並結算（M3：避免 orphan 與 pending 卡死）
+            failed = e.message;
+            ws.destroy();
+            finalize();
+          });
+          ws.on("error", (e: Error) => {
+            failed = e.message;
+            finalize();
+            ws.destroy();
+          });
+          ws.on("finish", finalize);
           stream.pipe(ws);
         });
         bb.on("close", () => {
@@ -152,6 +176,16 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
       });
     } catch (e) {
       return c.json({ ok: false, error: `上傳失敗：${(e as Error).message}` }, 500);
+    } finally {
+      // M3：reject / 斷線路徑可能留下「已寫入但未 register」的暫存檔，一律清除
+      for (const stored of writtenStores) {
+        if (registeredStores.has(stored)) continue;
+        try {
+          fs.unlinkSync(vault.filePath(stored));
+        } catch {
+          /* ignore */
+        }
+      }
     }
 
     if (results.length === 0) {
@@ -216,12 +250,17 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
 
   pub.post("/:shareId", async (c) => {
     const shareId = c.req.param("shareId");
+    // H4：pin 表單極小；Content-Length 超限直接 413（防 parseBody 整包讀入記憶體）
+    const contentLen = Number(c.req.header("content-length") ?? 0);
+    if (contentLen > MAX_FORM_BODY) {
+      return c.text("Payload Too Large", 413);
+    }
     const rec = vault.getByShareId(shareId);
     if (!rec || !vault.ensureOnDisk(rec)) {
       return c.html(sharePageHtml({ shareId: null }), 404);
     }
 
-    const ip = xffIp(c);
+    const ip = clientIp(c, ctx.trustProxy);
     const limit = pinLimiter.hit(`pin:${ip}:${shareId}`);
     if (!limit.allowed) {
       return c.html(
@@ -259,11 +298,4 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
   });
 
   app.route("/s", pub);
-}
-
-/** 公開端 IP（XFF 由 nginx 設定，node 只 listen localhost） */
-function xffIp(c: import("hono").Context): string {
-  const xff = c.req.header("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return "unknown";
 }

@@ -54,7 +54,9 @@ export default function ToolShell() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [toolId]);
+    // L5：工具頁顯示自己的分頁標題
+    if (tool) document.title = `${tool.meta.title} // ${tool.meta.zhTitle}`;
+  }, [toolId, tool]);
 
   if (!tool) return <Navigate to="/" replace />;
   const Comp = tool.Component;
