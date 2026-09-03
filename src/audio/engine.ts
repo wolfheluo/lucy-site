@@ -1,15 +1,13 @@
 // =====================================================================
-//  音效引擎：全部用 Web Audio API 合成，無任何外部音檔。
+//  音效引擎：互動音效用 Web Audio API 合成，氛圍音樂使用外部音檔。
 //  互動音效：click / hover / decode / boot / line
-//  氛圍音樂：合成 pad（預設關閉，由 UI 開關啟動）
+//  氛圍音樂：public/bgm.mp3（預設關閉，由 UI 開關啟動）
 // =====================================================================
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private musicGain: GainNode | null = null;
-  private musicNodes: { osc: OscillatorNode[]; filter: BiquadFilterNode; lfo: OscillatorNode } | null = null;
-  private chordTimer: number | null = null;
-  private chordIndex = 0;
+  private music: HTMLAudioElement | null = null;
+  private musicFadeTimer: number | null = null;
   /** 是否已收到首次使用者手勢（autoplay 政策解鎖） */
   private unlocked = false;
 
@@ -53,6 +51,7 @@ class SoundEngine {
     if (this.ctx && this.master) {
       this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.02);
     }
+    if (this.music) this.music.volume = m ? 0 : 0.16;
   }
 
   /** small blip on click — short square pitch-up + noise tick */
@@ -220,94 +219,49 @@ class SoundEngine {
   // ---------------- ambient pad ----------------
 
   get ambientPlaying() {
-    return this.musicNodes !== null;
+    return this.music !== null;
   }
 
-  /** slow evolving synth pad (off by default) */
+  /** loop the homepage BGM (off by default) */
   startAmbient() {
-    const ctx = this.ensure();
-    const master = this.master;
-    if (!ctx || !master || this.musicNodes) return;
-
-    const musicGain = ctx.createGain();
-    musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    musicGain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 2.5);
-    musicGain.connect(master);
-    this.musicGain = musicGain;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 420;
-    filter.Q.value = 0.4;
-    filter.connect(musicGain);
-
-    const oscs: OscillatorNode[] = [];
-    const chord = this.nextChord();
-    chord.forEach((f) => {
-      const o = ctx.createOscillator();
-      o.type = "sawtooth";
-      o.frequency.value = f;
-      o.detune.value = (Math.random() - 0.5) * 12;
-      const og = ctx.createGain();
-      og.gain.value = 0.5 / chord.length;
-      o.connect(og).connect(filter);
-      o.start();
-      oscs.push(o);
+    if (typeof window === "undefined" || this.music) return;
+    const music = new Audio("/bgm.mp3");
+    music.loop = true;
+    music.volume = 0;
+    this.music = music;
+    void music.play().then(() => {
+      this.fadeMusic(music, this.muted ? 0 : 0.16, 1200);
     });
-
-    // slow filter LFO for movement
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.06;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 220;
-    lfo.connect(lfoG).connect(filter.frequency);
-    lfo.start();
-
-    this.musicNodes = { osc: oscs, filter, lfo };
-
-    // rotate chord every 9s
-    this.chordTimer = window.setInterval(() => {
-      if (!this.ctx || !this.musicNodes) return;
-      const chordNow = this.nextChord();
-      const t = this.ctx.currentTime;
-      this.musicNodes.osc.forEach((o, i) => {
-        o.frequency.setTargetAtTime(chordNow[i % chordNow.length], t, 0.8);
-      });
-    }, 9000);
   }
 
   stopAmbient() {
-    if (!this.ctx || !this.musicNodes) return;
-    const t = this.ctx.currentTime;
-    if (this.musicGain) {
-      this.musicGain.gain.setTargetAtTime(0.0001, t, 0.4);
-    }
-    const nodes = this.musicNodes;
-    window.setTimeout(() => {
-      nodes.osc.forEach((o) => {
-        try {
-          o.stop();
-        } catch {
-          /* already stopped */
-        }
-      });
-      nodes.lfo.stop();
-    }, 2200);
-    if (this.chordTimer) window.clearInterval(this.chordTimer);
-    this.musicNodes = null;
-    this.musicGain = null;
+    if (!this.music) return;
+    const music = this.music;
+    this.music = null;
+    this.fadeMusic(music, 0, 700, () => {
+      music.pause();
+      music.currentTime = 0;
+    });
   }
 
-  private nextChord(): number[] {
-    const chords = [
-      [110.0, 164.81, 220.0], // Am
-      [130.81, 196.0, 261.63], // C
-      [87.31, 130.81, 174.61], // F
-      [98.0, 146.83, 196.0], // G
-    ];
-    const c = chords[this.chordIndex % chords.length];
-    this.chordIndex++;
-    return c;
+  private fadeMusic(
+    music: HTMLAudioElement,
+    target: number,
+    duration: number,
+    onComplete?: () => void,
+  ) {
+    if (this.musicFadeTimer) window.clearInterval(this.musicFadeTimer);
+    const start = music.volume;
+    const startedAt = performance.now();
+    this.musicFadeTimer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / duration);
+      music.volume = start + (target - start) * progress;
+      if (progress >= 1) {
+        if (this.musicFadeTimer) window.clearInterval(this.musicFadeTimer);
+        this.musicFadeTimer = null;
+        onComplete?.();
+      }
+    }, 50);
   }
 }
 
