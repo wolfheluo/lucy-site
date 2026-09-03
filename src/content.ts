@@ -5,11 +5,11 @@
 // =====================================================================
 
 export const profile = {
-  name: "YOUR NAME", // Hero 主標題（英文／代號，建議 2~3 個單字內）
-  altName: "你的名字", // 中文名或暱稱
-  handle: "your_handle", // 代號（出現在導覽 logo 與 footer）
-  roleEn: "NETRUNNER // FRONTEND DEVELOPER", // Hero 英文職稱/定位
-  tagline: "在霓虹與數據的夾縫之間，我建造屬於自己的月球。", // Hero 中文標語
+  name: "WOLFHELUO", // Hero 主標題（英文／代號，建議 2~3 個單字內）
+  altName: "野格", // 中文名或暱稱
+  handle: "CYBER_SPACE", // 代號（出現在導覽 logo 與 footer）
+  roleEn: "NETRUNNER // CYBERSECURITY", // Hero 英文職稱/定位
+  tagline: "在霓虹與數據的夾縫之間，我的露西有了屬於自己的月球。", // Hero 中文標語
   bootOs: "NETRUNNER OS", // 載入畫面上的系統名稱
   bootVer: "v0.9.7 // DEEP-DIVE MODULE", // 載入畫面上的版本字樣
 };
@@ -18,8 +18,8 @@ export const about = {
   headingEn: "ABOUT",
   headingZh: "關於我",
   paragraphs: [
-    "你好，我是 <strong>你的名字</strong>。白天在城市的資料流裡潛行，晚上把靈感編譯成介面與畫面。相信好的作品像一次成功的深潛：<strong>安靜、精準、不留痕跡</strong>。",
-    "我擅長把冰冷的技術轉譯成人能感受到的體驗——從 3D 視覺、前端工程到細節控的互動設計。這裡是我在網路上的一小塊<span class=\"red\">自留地</span>，歡迎四處看看。",
+    "你好，我是 <strong>野格</strong>。平常沒事就在城市的資料流裡潛行:<strong>安靜、精準、不留痕跡</strong>。",
+    "喜歡潛水、滑雪、徒步、電音、當然還有2077。這裡是我在網路上的一小塊<span class=\"red\">自留地</span>，歡迎四處看看。",
   ],
   stats: [
     { value: "∞", label: "DEEP-DIVE" },
@@ -34,16 +34,20 @@ export const skills = {
   intro: "長期點亮的技能樹：",
   groups: [
     {
-      title: "FRONTEND",
-      items: ["React", "TypeScript", "Vite", "CSS / 動畫"],
+      title: "FRONTEND & WEB ARCHITECTURE",
+      items: ["React", "TypeScript", "Vite", "Node.js", "CSS / Animations"],
     },
     {
       title: "3D / CREATIVE CODING",
       items: ["Three.js", "React Three Fiber", "GLSL", "Framer Motion"],
     },
     {
-      title: "TOOLS / OTHER",
-      items: ["Git", "Node.js", "UI 設計", "效能調校"],
+      title: "SECURITY / REVERSE",
+      items: ["Python", "C", "Reverse Engineering", "Pentesting", "IDA Pro", "Git"],
+    },
+    {
+      title: "LIFE / OTHER",
+      items: ["Gaming", "Travel"],
     },
   ],
 };
@@ -79,11 +83,11 @@ export const projects = {
 export const contact = {
   headingEn: "CONTACT",
   headingZh: "聯絡",
-  line: "有案子、合作，或只是想聊聊月球——我的頻道永遠暢通。",
-  email: "you@example.com", // 主要聯絡信箱
+  line: "歡迎交流技術、打遊戲、找旅遊/吃飯搭子或純聊聊月球——我的頻道永遠開啟。",
+  email: "gm900411@gmail.com", // 主要聯絡信箱
   socials: [
-    { label: "GITHUB", href: "https://github.com/" },
-    { label: "MAIL", href: "mailto:you@example.com" },
-    { label: "LINKEDIN", href: "https://www.linkedin.com/" },
+    { label: "GITHUB", href: "https://github.com/wolfheluo" },
+    { label: "MAIL", href: "mailto:gm900411@gmail.com" },
+    { label: "INSTAGRAM", href: "https://www.instagram.com/wolfheluo/" },
   ],
 };
