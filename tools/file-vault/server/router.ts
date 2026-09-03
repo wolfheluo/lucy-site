@@ -90,6 +90,8 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     /** 本次 request 建立的所有實體檔（M3：未成功 register 的於結束時一併清除） */
     const writtenStores: string[] = [];
     const registeredStores = new Set<string>();
+    /** busboy 檔/part 數超限（M-9：原靜默丟棄 → 回傳明確 error item） */
+    let limitExceeded = false;
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -163,7 +165,19 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
           ws.on("finish", finalize);
           stream.pipe(ws);
         });
+        bb.on("filesLimit", () => {
+          limitExceeded = true;
+        });
+        bb.on("partsLimit", () => {
+          limitExceeded = true;
+        });
         bb.on("close", () => {
+          if (limitExceeded) {
+            results.push({
+              ok: false,
+              error: "超過單次上傳上限（50 個檔案），其餘檔案未上傳",
+            });
+          }
           closed = true;
           maybeDone();
         });

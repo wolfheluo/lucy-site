@@ -81,6 +81,12 @@ export default function VaultUI({
     async (list: FileList | File[]) => {
       const arr = Array.from(list);
       if (arr.length === 0 || uploading) return;
+      if (arr.length > 50) {
+        // M-9：server 單次上限 50 檔——先擋下並明示，避免靜默丟棄
+        setUploadErr(`單次最多上傳 50 個檔案（已選 ${arr.length} 個），請分批上傳`);
+        sfx.denied();
+        return;
+      }
       setUploadResult(null);
       setUploadErr(null);
       const names = arr.map((f) => f.name);

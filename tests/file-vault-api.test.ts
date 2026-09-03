@@ -297,3 +297,19 @@ describe("72h 自毀讀取路徑（M-2：過期即時湮滅，不靠每小時 sw
     expect(dlRes.status).toBe(404);
   });
 });
+
+
+describe("上傳數量上限（M-9：>50 檔不再靜默丟棄）", () => {
+  it("51 檔 → 50 成功 + 明確超限錯誤 item", async () => {
+    const cookie = await login();
+    const many: { name: string; content: string }[] = [];
+    for (let i = 0; i < 51; i++) many.push({ name: `bulk-${i}.txt`, content: `file ${i}` });
+    const res = await upload(cookie, many);
+    expect(res.status).toBe(200);
+    const okCount = res.json.files.filter((r) => r.ok).length;
+    const errs = res.json.files.filter((r) => !r.ok);
+    expect(okCount).toBe(50);
+    expect(errs.length).toBeGreaterThan(0);
+    expect(errs.some((e) => e.error.includes("上限"))).toBe(true);
+  });
+});
