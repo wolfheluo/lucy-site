@@ -130,6 +130,10 @@ export interface MonitorSnapshot {
   askDepthVol: number;
   /** 0..100 短線評分 */
   score: number;
+  /** 15 秒價格波動 %（取樣不足 15s 為 null） */
+  priceMove15sPct: number | null;
+  /** 紙上初始資金（PNL 基準） */
+  initialCapital: number;
   /** 紙上資金 */
   capital: number;
   positions: PositionView[];

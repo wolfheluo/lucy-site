@@ -112,6 +112,8 @@ export class BinanceMonitor {
   private lastMessageAt = 0;
   /** 1 分鐘統計是否已暖機（B-2：重連後需 ≥60s 時間跨度的成交才恢復策略決策） */
   private statsWarm = false;
+  /** 每秒價格取樣（[ts, price]，供 priceMove15sPct） */
+  private readonly priceHist: Array<[number, number]> = [];
 
   private readonly listeners = new Set<EngineListener>();
   private readonly stmtInsertForce: ReturnType<Db["prepare"]>;
@@ -251,6 +253,8 @@ export class BinanceMonitor {
       bidDepthVol: this.bidDepthVol,
       askDepthVol: this.askDepthVol,
       score: this.compositeScore(stats.cvd),
+      priceMove15sPct: this.priceMove15sPct(),
+      initialCapital: this.strategy.initialCapital,
       capital: this.strategy.capital,
       positions: this.strategy.positionList().map((p) =>
         this.toPositionView(p, ref > 0 ? ref : p.entryPrice)
@@ -422,11 +426,39 @@ export class BinanceMonitor {
     this.updateWarm();
     const ref = this.lastPrice > 0 ? this.lastPrice : this.markPrice;
     if (!(ref > 0)) return;
+    this.samplePrice(ref); // 每秒價格取樣（KILL SWITCH 波動 %）
     this.processStrategySnapshot({
       timestamp: this.now(),
       price: ref,
       cvd_1m: this.ring.stats().cvd,
     });
+  }
+
+  /** 每秒記錄價格樣本（保留 120s，供 15s 波動計算） */
+  private samplePrice(price: number): void {
+    const now = this.now();
+    this.priceHist.push([now, price]);
+    const cutoff = now - 120_000;
+    while (this.priceHist.length > 0 && this.priceHist[0][0] < cutoff) {
+      this.priceHist.shift();
+    }
+  }
+
+  /** 15 秒價格波動 %（樣本不足 15s → null） */
+  private priceMove15sPct(): number | null {
+    if (this.priceHist.length === 0) return null;
+    const cutoff = this.now() - 15_000;
+    const latest = this.priceHist[this.priceHist.length - 1][1];
+    // 找最早的 ts <= cutoff 樣本（由尾往前）
+    let refPrice: number | null = null;
+    for (let i = this.priceHist.length - 1; i >= 0; i--) {
+      if (this.priceHist[i][0] <= cutoff) {
+        refPrice = this.priceHist[i][1];
+        break;
+      }
+    }
+    if (refPrice === null || refPrice <= 0) return null;
+    return (Math.abs(latest - refPrice) / refPrice) * 100;
   }
 
   /** 暖機判定：窗內成交時間跨度 ≥55s（60s 窗的最舊樣本會被推出，跨度永不達 60s） */

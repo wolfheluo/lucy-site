@@ -1,0 +1,509 @@
+/* =====================================================================
+   BINANCE QUANT — FUI 儀表板樣式（獨立檔，class 前綴 bq-）
+   語彙：細線模組框 / 高密度 mono / 角落標籤 / 掃描/glow
+   配色沿用站上 :root（--ice/--red/--pink/--purple/--bg-2/--line…）
+   ===================================================================== */
+.bq {
+  --bq-ok: #46ffa8;
+  --bq-warn: #ffb020;
+  --bq-glow: rgba(168, 230, 255, 0.35);
+  --bq-font: "Rajdhani", var(--font-zh);
+  --bq-mono: "Noto Sans Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 30px;
+  color: var(--text);
+  font-family: var(--bq-font);
+}
+
+/* ── 模組框基座 ─────────────────────────────────────────────── */
+.bq-mod {
+  position: relative;
+  background: linear-gradient(180deg, rgba(10, 14, 22, 0.72), rgba(6, 8, 13, 0.85));
+  border: 1px solid var(--line);
+  padding: 26px 12px 10px;
+  overflow: hidden;
+}
+.bq-mod::before,
+.bq-mod::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+}
+.bq-mod::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid rgba(168, 230, 255, 0.65);
+  border-left: 1px solid rgba(168, 230, 255, 0.65);
+}
+.bq-mod::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1px solid rgba(255, 46, 77, 0.5);
+  border-right: 1px solid rgba(255, 46, 77, 0.5);
+}
+
+/* 模組標題（左上角落標籤） */
+.bq-mod-head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 10px;
+  font-family: var(--bq-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ice-deep);
+  background: rgba(168, 230, 255, 0.045);
+  border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  user-select: none;
+}
+.bq-mod-head .hd-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--faint);
+  box-shadow: 0 0 6px currentColor;
+}
+.bq-mod-head .hd-dot.ok { background: var(--bq-ok); color: var(--bq-ok); }
+.bq-mod-head .hd-dot.hot { background: var(--red); color: var(--red); }
+.bq-mod-head .hd-right {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+/* ── 主網格 ────────────────────────────────────────────────── */
+.bq-grid {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  grid-template-areas:
+    "radar radar"
+    "account matrix"
+    "ledger trend";
+  gap: 10px;
+}
+.bq-radar { grid-area: radar; }
+.bq-account { grid-area: account; }
+.bq-matrix { grid-area: matrix; }
+.bq-ledger { grid-area: ledger; }
+.bq-trend { grid-area: trend; }
+
+/* ── GRAPH CONTROL 雷達 ────────────────────────────────────── */
+.bq-radar-body {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 330px;
+}
+.bq-radar-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+}
+/* 雷達右側 KILL SWITCH 節點（連線視覺由 canvas 畫） */
+.bq-kill {
+  flex: 0 0 148px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 6px 8px 2px;
+  border: 1px solid var(--line);
+  background: rgba(8, 10, 16, 0.8);
+  position: relative;
+}
+.bq-kill::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -7px;
+  width: 7px;
+  background: linear-gradient(90deg, transparent, rgba(168, 230, 255, 0.28));
+}
+.bq-kill .ks-name {
+  font-family: var(--bq-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--dim);
+  writing-mode: horizontal-tb;
+}
+.bq-kill .ks-state {
+  font-family: var(--bq-mono);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+}
+.bq-kill .ks-state.armed {
+  color: var(--bq-ok);
+  text-shadow: 0 0 14px rgba(70, 255, 168, 0.65);
+  background: rgba(70, 255, 168, 0.06);
+  animation: bqPulse 2.2s ease-in-out infinite;
+}
+.bq-kill .ks-state.idle {
+  color: var(--faint);
+  border-color: var(--faint);
+}
+.bq-kill .ks-move {
+  font-family: var(--bq-mono);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--bq-ok);
+  text-shadow: 0 0 12px rgba(70, 255, 168, 0.4);
+}
+.bq-kill .ks-move.low {
+  color: var(--red);
+  text-shadow: 0 0 12px rgba(255, 46, 77, 0.6);
+  animation: bqBlink 1s steps(2) infinite;
+}
+.bq-kill .ks-cap {
+  font-family: var(--bq-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+}
+@keyframes bqPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(70, 255, 168, 0.35); }
+  50% { box-shadow: 0 0 18px 2px rgba(70, 255, 168, 0.25); }
+}
+@keyframes bqBlink {
+  50% { opacity: 0.35; }
+}
+
+/* 雷達底下的即時數值列（六軸 HUD 角標由 canvas 繪） */
+.bq-tape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  padding: 6px 10px;
+  font-family: var(--bq-mono);
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+  background: rgba(6, 9, 14, 0.6);
+}
+.bq-tape .tp {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.bq-tape .tp-k {
+  color: var(--faint);
+  letter-spacing: 0.1em;
+  font-size: 9px;
+}
+.bq-tape .tp-v { color: var(--ice); }
+.bq-tape .tp-v.up { color: var(--bq-ok); }
+.bq-tape .tp-v.down { color: var(--red); }
+
+/* ── ACCOUNT 紙上資金 ──────────────────────────────────────── */
+.bq-account-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 150px;
+}
+.bq-cap-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.bq-cap {
+  font-family: var(--bq-font);
+  font-size: clamp(30px, 3.4vw, 44px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cold);
+  text-shadow: 0 0 22px rgba(238, 247, 255, 0.25);
+  line-height: 1;
+}
+.bq-pnl {
+  font-family: var(--bq-mono);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+}
+.bq-pnl.up { color: var(--bq-ok); }
+.bq-pnl.down { color: var(--red); }
+
+/* 方向燈（純視覺：目前策略部位） */
+.bq-dir3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+.bq-dir {
+  text-align: center;
+  padding: 7px 0 5px;
+  font-family: var(--bq-mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--faint);
+  border: 1px solid rgba(139, 162, 184, 0.18);
+  background: rgba(8, 10, 16, 0.5);
+  position: relative;
+}
+.bq-dir .dir-sub {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+.bq-dir.long {
+  color: var(--bq-ok);
+  border-color: rgba(70, 255, 168, 0.7);
+  background: rgba(70, 255, 168, 0.07);
+  box-shadow: inset 0 0 14px rgba(70, 255, 168, 0.12), 0 0 10px rgba(70, 255, 168, 0.12);
+}
+.bq-dir.short {
+  color: var(--red);
+  border-color: rgba(255, 46, 77, 0.7);
+  background: rgba(255, 46, 77, 0.07);
+  box-shadow: inset 0 0 14px rgba(255, 46, 77, 0.12), 0 0 10px rgba(255, 46, 77, 0.12);
+}
+.bq-dir.flat {
+  color: var(--ice);
+  border-color: rgba(168, 230, 255, 0.55);
+  background: rgba(168, 230, 255, 0.05);
+}
+
+/* 部位清單（持倉中） */
+.bq-pos {
+  font-family: var(--bq-mono);
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-left: 2px solid var(--ice-deep);
+  background: rgba(168, 230, 255, 0.04);
+}
+.bq-pos.long { border-left-color: var(--bq-ok); color: var(--bq-ok); }
+.bq-pos.short { border-left-color: var(--red); color: var(--red); }
+.bq-pos .pos-meta { color: var(--dim); }
+
+/* ── FAILURE MATRIX ────────────────────────────────────────── */
+.bq-matrix-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+}
+.bq-mx-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(160, 215, 255, 0.06);
+  font-family: var(--bq-mono);
+  font-size: 11px;
+}
+.bq-mx-row .mx-name {
+  color: var(--dim);
+  letter-spacing: 0.12em;
+  font-size: 10px;
+}
+.bq-mx-row .mx-val {
+  color: var(--text);
+  text-align: right;
+}
+.bq-mx-row .mx-st {
+  min-width: 64px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+}
+.mx-st.ok { color: var(--bq-ok); }
+.mx-st.warn { color: var(--bq-warn); animation: bqBlink 1.2s steps(2) infinite; }
+.mx-st.fail { color: var(--red); animation: bqBlink 0.8s steps(2) infinite; }
+.mx-st.dim { color: var(--faint); }
+
+/* ── VERIFICATION LEDGER ───────────────────────────────────── */
+.bq-ledger-body {
+  height: 218px;
+  overflow-y: auto;
+  font-family: var(--bq-mono);
+  font-size: 11px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(95, 184, 230, 0.4) transparent;
+}
+.bq-ledger-body::-webkit-scrollbar { width: 5px; }
+.bq-ledger-body::-webkit-scrollbar-thumb { background: rgba(95, 184, 230, 0.4); }
+.bq-lg-row {
+  display: grid;
+  grid-template-columns: 62px 96px 1fr auto;
+  gap: 8px;
+  padding: 2px 8px;
+  border-bottom: 1px dotted rgba(160, 215, 255, 0.05);
+  white-space: nowrap;
+  animation: bqRowIn 0.25s var(--ease-out);
+}
+@keyframes bqRowIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.bq-lg-row .lg-ts { color: var(--faint); }
+.bq-lg-row .lg-code { color: var(--ice); letter-spacing: 0.06em; }
+.bq-lg-row .lg-info { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.bq-lg-row .lg-st { letter-spacing: 0.1em; }
+.bq-lg-row.sys .lg-code { color: var(--purple); }
+.bq-lg-row.alert-sell .lg-code, .bq-lg-row.alert-sell .lg-st { color: var(--red); }
+.bq-lg-row.alert-buy .lg-code { color: var(--bq-ok); }
+.bq-lg-row.entry-long { color: var(--bq-ok); }
+.bq-lg-row.entry-short { color: var(--red); }
+.bq-lg-row.exit .lg-st { color: var(--bq-warn); }
+
+/* ── TREND（DASHBOARD VS GROUND TRUTH）────────────────────── */
+.bq-trend-body {
+  position: relative;
+  height: 218px;
+}
+.bq-trend-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── 頂欄 ──────────────────────────────────────────────────── */
+.bq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(14, 20, 30, 0.85), rgba(7, 9, 14, 0.9));
+}
+.bq-head .bq-brand {
+  font-family: var(--bq-font);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--cold);
+  text-shadow: 0 0 16px rgba(168, 230, 255, 0.35);
+}
+.bq-head .bq-brand em {
+  font-style: normal;
+  color: var(--ice-deep);
+}
+.bq-head .bq-sym {
+  font-family: var(--bq-mono);
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.2em;
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+}
+.bq-head .bq-head-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--bq-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.bq-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+.bq-status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+.bq-status-pill.run { color: var(--bq-ok); }
+.bq-status-pill.link { color: var(--ice); }
+.bq-status-pill.warm { color: var(--bq-warn); }
+.bq-status-pill.stop { color: var(--faint); }
+
+/* 管理引擎鈕 */
+.bq-admin-btn {
+  font-family: var(--bq-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  padding: 5px 14px;
+  color: var(--ice);
+  border: 1px solid rgba(168, 230, 255, 0.5);
+  background: rgba(168, 230, 255, 0.05);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: box-shadow 0.2s, background 0.2s;
+}
+.bq-admin-btn:hover {
+  background: rgba(168, 230, 255, 0.14);
+  box-shadow: 0 0 14px rgba(168, 230, 255, 0.25);
+}
+.bq-admin-btn.stop { color: var(--red); border-color: rgba(255, 46, 77, 0.5); }
+.bq-admin-btn.stop:hover { background: rgba(255, 46, 77, 0.12); }
+.bq-admin-btn:disabled { opacity: 0.4; cursor: wait; }
+
+/* 載入/鎖定態 */
+.bq-boot {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: var(--bq-mono);
+  color: var(--ice-deep);
+  letter-spacing: 0.3em;
+}
+.bq-boot .bar {
+  width: 220px;
+  height: 2px;
+  background: rgba(168, 230, 255, 0.12);
+  overflow: hidden;
+  position: relative;
+}
+.bq-boot .bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--ice);
+  animation: bqScan 1.1s linear infinite;
+}
+@keyframes bqScan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(220%); }
+}
+
+/* 窄螢幕收合 */
+@media (max-width: 980px) {
+  .bq-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: "radar" "account" "matrix" "ledger" "trend";
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bq-kill .ks-state.armed,
+  .bq-kill .ks-move.low,
+  .mx-st.warn,
+  .mx-st.fail,
+  .bq-boot .bar::after {
+    animation: none;
+  }
+}
