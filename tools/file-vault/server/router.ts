@@ -50,7 +50,7 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     db: ctx.db,
     dir: path.join(ctx.dataDir, "vault"),
   });
-  // 分享 pin 防護（錯 pin 才計；lock_until 起算滿 300s；鎖定期任何提交都拒）
+  // 分享 pin 防護（錯 pin 才計；lock_until 起算滿 60s；鎖定期任何提交都拒）
   const stmtGuard = ctx.db.prepare(
     `SELECT fail_count, lock_until FROM share_pin_guards WHERE key = ?`
   );
@@ -285,7 +285,7 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
       | { fail_count: number; lock_until: number }
       | undefined;
     const now = Date.now();
-    // 鎖定期（lock_until 起算滿 300s）：任何提交（含對 pin）都拒——回剩餘秒
+    // 鎖定期（lock_until 起算滿 60s）：任何提交（含對 pin）都拒——回剩餘秒
     // + 絕對 lockUntil（前端精確倒數、refresh 後再提交同步）
     if (guard && guard.lock_until > now) {
       const lockedSec = Math.ceil((guard.lock_until - now) / 1000);
