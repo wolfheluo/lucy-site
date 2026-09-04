@@ -188,11 +188,11 @@ export function sharePageHtml(s: SharePageState): string {
   /* ── 鎖定：能量封鎖（body.locked，429 頁面）── */
   body.locked form { position: relative; }
   body.locked form::before {
-    content: ""; position: absolute; top: -8px; bottom: -8px; left: 0;
+    content: ""; position: absolute; top: -8px; bottom: -8px; left: -45%;
     width: 40%; pointer-events: none; z-index: 2;
     background: linear-gradient(90deg, transparent,
       rgba(168,230,255,.28), rgba(255,46,77,.45), transparent);
-    animation: lockSweep .75s cubic-bezier(.4,0,.2,1) 1;
+    animation: lockSweep .7s cubic-bezier(.4,0,.2,1) .15s 1 forwards;
   }
   @keyframes lockSweep {
     0% { left: -45%; filter: blur(6px); }
@@ -423,6 +423,27 @@ export function sharePageHtml(s: SharePageState): string {
           setTimeout(tick, 250);
         }
         tick();
+      })();
+
+      // 紅光掃過後：輸入框「自己開始輸入亂碼」——自動灌入，不讓使用者輸入
+      (function corruptPin() {
+        var b = document.body;
+        if (!b.classList.contains("locked")) return;
+        var pin = document.getElementById("pin");
+        if (!pin) return;
+        // sweep 完成（delay .15s + dur .7s）後開始；sweep 與灌入重疊會搶焦點視覺
+        setTimeout(function () {
+          var CH = "@#$%&*?!+<=>[]{}";
+          var i = 0;
+          var iv = setInterval(function () {
+            pin.value += CH.charAt(Math.floor(Math.random() * CH.length));
+            i += 1;
+            if (i >= 4) {
+              clearInterval(iv);
+              pin.blur();
+            }
+          }, 140);
+        }, 1050);
       })();
     })();
   </script>
