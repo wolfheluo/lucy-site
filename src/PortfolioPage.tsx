@@ -32,6 +32,14 @@ export default function PortfolioPage() {
 
   const [webglOk, setWebglOk] = useState(true);
   const [booted, setBooted] = useState(reduced);
+  // boot 碎裂 overlay 是否已真正退場（decode 登場時機——被 overlay 蓋著播 = 看不到）
+  // 兜底：framer exit 若卡（RouteTransition 黑屏同類）onExitComplete 不 fire → 1.5s 強制
+  const [bootGone, setBootGone] = useState(reduced);
+  useEffect(() => {
+    if (!booted || reduced) return;
+    const t = setTimeout(() => setBootGone(true), 1500);
+    return () => clearTimeout(t);
+  }, [booted, reduced]);
   const [fxOn, setFxOn] = useState(true);
   const [ambOn, setAmbOn] = useState(false);
 
@@ -92,6 +100,7 @@ export default function PortfolioPage() {
 
       <Hud
         visible={booted}
+        bootGone={bootGone}
         fxOn={fxOn}
         onToggleFx={() => setFxOn((v) => !v)}
         ambOn={ambOn}
@@ -101,7 +110,7 @@ export default function PortfolioPage() {
 
       {fxOn && !reduced && !coarse && booted && <CustomCursor />}
 
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => setBootGone(true)}>
         {!booted && !reduced && <BootScreen key="boot" onDone={() => setBooted(true)} />}
       </AnimatePresence>
     </>

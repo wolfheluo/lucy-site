@@ -42,6 +42,8 @@ function ProgressBar() {
 
 interface HudProps {
   visible: boolean;
+  /** boot 碎裂 overlay 已退場（餘額 decode 登場時機） */
+  bootGone: boolean;
   fxOn: boolean;
   onToggleFx: () => void;
   ambOn: boolean;
@@ -49,7 +51,15 @@ interface HudProps {
   reduced: boolean;
 }
 
-export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, reduced }: HudProps) {
+export default function Hud({
+  visible,
+  bootGone,
+  fxOn,
+  onToggleFx,
+  ambOn,
+  onToggleAmb,
+  reduced,
+}: HudProps) {
   // DeepSeek CNY 餘額（CONTACT 右側；查不到/無 key → null 不顯示）
   // 60s 輪詢（server 端同 60s cache）；值變 → GlitchText 亂碼解碼重播
   const [dsBalance, setDsBalance] = useState<string | null>(null);
@@ -104,7 +114,9 @@ export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, red
           ))}
           {dsBalance !== null && (
             <span className="hud-balance">
-              <GlitchText text={dsBalance} instant={reduced} hover />
+              {/* start=bootGone：等 boot 碎裂 overlay 真正退場才開始 decode——
+                  否則 reload 時 decode 在 boot 底下/期間跑完，看不到亂碼登場 */}
+              <GlitchText text={dsBalance} instant={reduced} hover start={bootGone} />
             </span>
           )}
         </nav>
