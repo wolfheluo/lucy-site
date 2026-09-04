@@ -45,7 +45,8 @@ export default function PortfolioPage() {
   // 從工具頁返回時回到頂端，並復原主站標題（L5）
   useEffect(() => {
     window.scrollTo(0, 0);
-    document.title = `${profile.name} // ${profile.roleEn.split(" ")[0]}`;
+    // 品牌化 title（與 index.html 同步；改名時兩處都改）
+    document.title = `${profile.name} ${profile.altName} — NETRUNNER 個人網站`;
   }, []);
 
   useEffect(() => {

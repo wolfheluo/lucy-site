@@ -9,8 +9,41 @@
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07070b" />
-    <meta name="description" content="NETRUNNER // 個人網站 —— 在霓虹與數據的夾縫之間。" />
-    <title>NETRUNNER PORTFOLIO</title>
+    <!-- SEO：品牌化 title（與 PortfolioPage 動態 title 同步；改名時兩處都改） -->
+    <title>WOLFHELUO 野格 — NETRUNNER 個人網站</title>
+    <meta
+      name="description"
+      content="WOLFHELUO（野格）的 NETRUNNER 個人網站——在霓虹與數據的夾縫之間，我的露西終於有了屬於自己的月球。"
+    />
+    <!-- JSON-LD structured data：WebSite + Person（內容與 src/content.ts 同步；改名/換連結時兩處都改） -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://wolfheluo.com/#website",
+            "url": "https://wolfheluo.com/",
+            "name": "WOLFHELUO 野格",
+            "inLanguage": "zh-Hant",
+            "publisher": { "@id": "https://wolfheluo.com/#person" }
+          },
+          {
+            "@type": "Person",
+            "@id": "https://wolfheluo.com/#person",
+            "name": "野格",
+            "alternateName": "WOLFHELUO",
+            "url": "https://wolfheluo.com/",
+            "email": "mailto:gm900411@gmail.com",
+            "description": "網路安全與開發者；NETRUNNER——在城市的資料流裡潛行，安靜且不留痕跡。",
+            "sameAs": [
+              "https://github.com/wolfheluo",
+              "https://www.instagram.com/wolfheluo/"
+            ]
+          }
+        ]
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
