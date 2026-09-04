@@ -55,7 +55,7 @@ export const skills = {
 
 export const projects = {
   headingEn: "PROJECTS",
-  headingZh: "作品",
+  headingZh: "小工具",
   items: [
     {
       idx: "P-01",
