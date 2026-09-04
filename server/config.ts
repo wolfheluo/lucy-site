@@ -26,6 +26,8 @@ export interface ServerConfig {
   /** 登入失敗鎖定：max 次 / window ms */
   loginRateMax: number;
   loginRateWindowMs: number;
+  /** DeepSeek API key（nav 顯示 CNY 餘額用；null = 未設定） */
+  apiKey: string | null;
 }
 
 export const DEFAULT_ADMIN_PASSWORD = "admin123";
@@ -74,6 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     trustProxy: env.TRUST_PROXY === "1",
     loginRateMax: intEnv(env.VAULT_LOGIN_RATE_MAX, 5),
     loginRateWindowMs: 15 * 60 * 1000,
+    apiKey: env.API_KEY && env.API_KEY.length > 0 ? env.API_KEY : null,
   };
 }
 

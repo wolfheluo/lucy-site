@@ -3,7 +3,7 @@
 //  右下 FX / MUSIC 開關。
 // =====================================================================
 import { motion } from "framer-motion";
-import { useEffect, useRef, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { profile } from "../content";
 import { sfx } from "../audio/engine";
 
@@ -49,6 +49,25 @@ interface HudProps {
 }
 
 export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, reduced }: HudProps) {
+  // DeepSeek CNY 餘額（CONTACT 右側；查不到/無 key → null 不顯示）
+  const [dsBalance, setDsBalance] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/deepseek/balance")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (alive && b && b.ok === true && typeof b.cny === "number") {
+          setDsBalance(b.cny.toFixed(2));
+        }
+      })
+      .catch(() => {
+        /* 查不到就不顯示 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const go = (id: string) => (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     sfx.click();
@@ -75,6 +94,7 @@ export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, red
               {label}
             </a>
           ))}
+          {dsBalance !== null && <span className="hud-balance">{dsBalance}</span>}
         </nav>
       </div>
 

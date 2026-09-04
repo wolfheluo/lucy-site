@@ -436,6 +436,21 @@ a { color: inherit; text-decoration: none; }
 }
 .hud nav a:hover { color: var(--cold); }
 .hud nav a:hover::after { transform: scaleX(1); transform-origin: left; }
+/* DeepSeek CNY 餘額（CONTACT 右側；低調冰藍 mono 阿拉伯數字，無單位標註） */
+.hud-balance {
+  font-family: var(--font-en);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--ice-deep);
+  opacity: 0.8;
+  align-self: center;
+  padding-left: clamp(0.8rem, 2.4vw, 2rem);
+  border-left: 1px solid rgba(168, 230, 255, 0.16);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
 
 .hud-progress {
   position: absolute;

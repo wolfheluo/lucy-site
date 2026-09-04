@@ -22,6 +22,7 @@ import {
 } from "./auth.js";
 import { makeRateLimiter } from "./rate-limit.js";
 import { mountTools } from "./registry.js";
+import { createBalanceApi } from "./deepseek-balance.js";
 import type { ServerToolHandle } from "../tools/types.js";
 
 /** Hono app + 共享 SQLite 實例（M1：測試結束可 db.close()） */
@@ -96,6 +97,9 @@ export function createApp(cfg: ServerConfig = loadConfig()): LucyApp {
 
   // ── tools ──────────────────────────────────────────────────────────
   app.handles = mountTools(app, toolCtx);
+
+  // ── DeepSeek 餘額（nav 顯示 CNY 用；無 key → {ok:false} 前端隱藏）──
+  app.route("/api/deepseek", createBalanceApi({ apiKey: cfg.apiKey }));
 
   // 未匹配任何路由 → 統一 JSON 404（L11）
   app.notFound((c) => c.json({ ok: false, error: "Not Found" }, 404));
