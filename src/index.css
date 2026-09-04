@@ -436,23 +436,25 @@ a { color: inherit; text-decoration: none; }
 }
 .hud nav a:hover { color: var(--cold); }
 .hud nav a:hover::after { transform: scaleX(1); transform-origin: left; }
-/* DeepSeek CNY 餘額（CONTACT 右側；低調冰藍 GlitchText 亂碼解碼數字，無單位標註）
-   pointer-events 需 auto：hover 觸發 GlitchText 抖動 */
+/* DeepSeek CNY 餘額（CONTACT 右側）——樣式與 nav link（CONTACT）完全對齊：
+   同字型/字重/大小/字距/顏色；差異只有分隔線與 hover 抖動（GlitchText） */
 .hud-balance {
   font-family: var(--font-en);
-  font-size: 0.85rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  color: var(--ice);
+  letter-spacing: 0.3em;
+  font-size: 0.85rem;
+  color: var(--dim);
   align-self: center;
-  padding-left: clamp(0.8rem, 2.4vw, 2rem);
-  border-left: 1px solid rgba(168, 230, 255, 0.16);
-  text-shadow: 0 0 14px rgba(168, 230, 255, 0.35);
+  padding: 0.2em 0 0.2em clamp(0.8rem, 2.4vw, 2rem);
+  border-left: 1px solid rgba(160, 215, 255, 0.14);
   user-select: none;
   white-space: nowrap;
+  cursor: default;
 }
-.hud-balance .glitch-box { display: inline-block; vertical-align: bottom; }
-.hud-balance .glitch-box .dec { color: var(--ice); }
+.hud-balance .glitch-box { display: inline-block; vertical-align: baseline; }
+.hud-balance .glitch-box .dec,
+.hud-balance .glitch-box .ghost { color: inherit; }
+.hud-balance:hover { color: var(--cold); } /* 與 nav a:hover 同色系 */
 
 .hud-progress {
   position: absolute;
@@ -763,6 +765,7 @@ html.cursor-none * { cursor: none !important; }
   .sec { padding: 8vh 1.4rem; }
   .hud-top { padding: 0.9rem 1.2rem; }
   .hud nav a { letter-spacing: 0.12em; font-size: 0.78rem; }
+  .hud-balance { letter-spacing: 0.12em; font-size: 0.78rem; padding-left: 0.9rem; }
   .hud .logo { font-size: 0.8rem; }
   .cards { margin-left: 0; }
   .toggles { right: 1rem; bottom: 1rem; }
