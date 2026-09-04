@@ -9,7 +9,7 @@
 //      DELETE /share/:id       撤銷分享
 //    /s/*                      公開分享
 //      GET    /:shareId        分享頁（精簡 HTML）
-//      POST   /:shareId        pin 驗證 → 成功即串流下載（錯 pin 3 次鎖 300s，鎖 IP）
+//      POST   /:shareId        pin 驗證 → 成功即串流下載（錯 pin 3 次鎖 60s，鎖 IP）
 // =====================================================================
 import fs from "node:fs";
 import path from "node:path";
@@ -27,7 +27,7 @@ const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024; // 2GB（與 nginx client_max_b
 const MAX_FORM_BODY = 64 * 1024; // H4：公開 pin 表單上限（避免 parseBody 整包讀入記憶體）
 /** 分享 pin 防護：錯 pin 才計，第 PIN_MAX_FAILS 次錯當下鎖 PIN_LOCK_MS（起算滿） */
 const PIN_MAX_FAILS = 3;
-const PIN_LOCK_MS = 300 * 1000;
+const PIN_LOCK_MS = 60 * 1000;
 const CLEANUP_INTERVAL_MS = 3600 * 1000; // 每小時
 
 function streamFile(c: import("hono").Context, vault: Vault, storedName: string, originalName: string, size: number) {

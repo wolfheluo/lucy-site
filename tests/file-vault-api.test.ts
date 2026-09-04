@@ -217,7 +217,7 @@ describe("file-vault 分享與公開下載", () => {
     expect(buf.equals(content)).toBe(true);
   });
 
-  it("錯 pin 3 次 → 第 3 次即 429 鎖定 300 秒；鎖定期內對 pin 也拒絕（專用 IP）", async () => {
+  it("錯 pin 3 次 → 第 3 次即 429 鎖定 60 秒；鎖定期內對 pin 也拒絕（專用 IP）", async () => {
     const cookie = await login();
     const { json } = await upload(cookie, [{ name: "ratelimit.txt", content: "x" }]);
     const id = json.files[0].file!.id;
@@ -241,7 +241,7 @@ describe("file-vault 分享與公開下載", () => {
     expect(locked.status).toBe(429);
     const lockedText = await locked.text();
     expect(lockedText).toContain("鎖定");
-    expect(lockedText).toContain('<b id="lockcd">300</b>'); // 倒數起點 300
+    expect(lockedText).toContain('<b id="lockcd">60</b>'); // 倒數起點 300
     // 鎖定期（lockUntil 絕對時間戳給前端倒數）內：輸對 pin 也 429
     expect(lockedText).toContain("lockUntil");
     const correct = await post(share.pin);
