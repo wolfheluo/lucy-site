@@ -46,7 +46,7 @@ export default function PortfolioPage() {
   useEffect(() => {
     window.scrollTo(0, 0);
     // 品牌化 title（與 index.html 同步；改名時兩處都改）
-    document.title = `${profile.name} — ${profile.roleEn.split(" ")[0]}`;
+    document.title = `${profile.name} // ${profile.roleEn.split(" ")[0]}`;
   }, []);
 
   useEffect(() => {
