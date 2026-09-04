@@ -61,7 +61,7 @@ export function sharePageHtml(s: SharePageState): string {
         ${s.lockedSec ? '<span class="lock-badge">⛓ LOCKED</span>' : ""}
       </label>
       <input id="pin" name="pin" inputmode="numeric" maxlength="4"
-             placeholder="••••" required autofocus${s.lockedSec ? " disabled" : ""} />
+             placeholder="••••" required autofocus${s.lockedSec ? " disabled" : ""} />${s.lockedSec ? `<span class="cx" aria-hidden="true"></span>` : ""}
       <button type="submit"${s.lockedSec ? " disabled" : ""}>DECRYPT ▸</button>
     </form>
     ${errHtml ? `<div class="err">✕ ${errHtml}</div>` : ""}
@@ -213,8 +213,34 @@ export function sharePageHtml(s: SharePageState): string {
   body.locked input {
     border-color: rgba(255,46,77,.6);
     background: rgba(255,46,77,.07);
-    color: #ff8fa3; cursor: not-allowed;
+    color: transparent; caret-color: transparent; cursor: not-allowed;
     animation: lockPulse 1.3s ease-in-out infinite;
+  }
+  /* 亂碼 overlay（真 input 藏字，逐字動畫層） */
+  .cx {
+    position: absolute; display: flex; justify-content: center;
+    align-items: center; gap: .95em; pointer-events: none; z-index: 3;
+  }
+  .cx i {
+    font-style: normal; color: #ff8fa3;
+    text-shadow: 0 0 8px rgba(255,46,77,.45);
+    transition: color .08s;
+  }
+  .cx i.hot {
+    color: #fff;
+    text-shadow: 0 0 12px rgba(255,255,255,.9), 0 0 26px rgba(255,128,148,.6);
+  }
+  .cx.scan::before {
+    content: ""; position: absolute; top: 6%; bottom: 6%; width: 2.4rem;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent);
+    filter: blur(1.5px); pointer-events: none;
+    animation: cxScan .52s linear 1;
+  }
+  @keyframes cxScan {
+    0% { left: 0%; opacity: 0; }
+    10% { opacity: .95; }
+    90% { opacity: .95; }
+    100% { left: calc(100% - 2.4rem); opacity: 0; }
   }
   body.locked input::placeholder { color: rgba(255,128,148,.35); }
   @keyframes lockPulse {
@@ -425,31 +451,95 @@ export function sharePageHtml(s: SharePageState): string {
         tick();
       })();
 
-      // 紅光掃過後：輸入框自動灌入 4 字亂碼 → 之後每秒整組重寫（glitch 動畫）
-      (function corruptPin() {
+      // ── 鎖定亂碼引擎（MatrixDecode 式）──
+      // 真 input 藏字；overlay（.cx）逐字動畫。每秒刷新 = 掃描光帶由左至右
+      // 掃過 + 字元依序「decode 閃換」（快速字符滾動 → 定格新字 + 白熱殘影）
+      (function cxEngine() {
         var b = document.body;
         if (!b.classList.contains("locked")) return;
         var pin = document.getElementById("pin");
-        if (!pin) return;
+        var host = document.querySelector(".cx");
+        if (!pin || !host) return;
+        var reduced = !!(window.matchMedia &&
+          matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+        // overlay 對齊 input 外框（.cx absolute 相對 form，分享頁固定定位一次）
+        (function align() {
+          var r = pin.getBoundingClientRect();
+          var f = host.offsetParent.getBoundingClientRect();
+          host.style.left = (r.left - f.left) + "px";
+          host.style.top = (r.top - f.top) + "px";
+          host.style.width = r.width + "px";
+          host.style.height = r.height + "px";
+        })();
+        pin.removeAttribute("placeholder");
+
         var CH = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*?!+<=>[]{}";
         var rand = function () {
           return CH.charAt(Math.floor(Math.random() * CH.length));
         };
-        // sweep 完成（delay .15s + dur .7s）後開始灌入
+        var cells = [];
+        function build(n) {
+          host.innerHTML = ""; cells = [];
+          for (var k = 0; k < n; k++) {
+            var c = document.createElement("i");
+            host.appendChild(c); cells.push(c);
+          }
+        }
+        function setCell(k, ch, hot) {
+          cells[k].textContent = ch;
+          if (hot) cells[k].classList.add("hot");
+        }
+        function cool() {
+          for (var k = 0; k < cells.length; k++) cells[k].classList.remove("hot");
+        }
+
+        // 每秒重寫：光帶掃過 + 字元依序 decode
+        function rewrite() {
+          var next = [rand(), rand(), rand(), rand()];
+          cool();
+          host.classList.remove("scan");
+          void host.offsetWidth; // reflow → 光帶動畫重播
+          host.classList.add("scan");
+          var k = 0;
+          (function step() {
+            if (k >= 4) { setTimeout(cool, 220); return; }
+            var tgt = next[k];
+            var flips = 0;
+            var fiv = setInterval(function () {
+              // 快速字符滾動 → 定格新字
+              if (flips >= 2) {
+                clearInterval(fiv);
+                setCell(k, tgt, true);
+                k += 1;
+                setTimeout(step, 55);
+              } else {
+                setCell(k, flips === 0 ? rand() : rand(), false);
+                flips += 1;
+              }
+            }, 34);
+          })();
+        }
+        function plainRewrite() {
+          for (var k = 0; k < 4; k++) cells[k].textContent = rand();
+        }
+
+        // 首次灌入（紅光 sweep 完成後，逐字 150ms）
         setTimeout(function () {
+          build(4);
           var i = 0;
           var iv = setInterval(function () {
-            pin.value += rand();
+            setCell(i, rand(), true);
             i += 1;
             if (i >= 4) {
               clearInterval(iv);
               pin.blur();
-              // 每秒整組純換（無震動動畫）
-              setInterval(function () {
-                pin.value = rand() + rand() + rand() + rand();
-              }, 1000);
+              cool();
+              setTimeout(function () {
+                setInterval(reduced ? plainRewrite : rewrite, 1050);
+              }, 260);
             }
-          }, 140);
+          }, 150);
         }, 1050);
       })();
     })();
