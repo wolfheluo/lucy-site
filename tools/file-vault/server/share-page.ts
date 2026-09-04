@@ -222,7 +222,10 @@ export function sharePageHtml(s: SharePageState): string {
     align-items: center; gap: .95em; pointer-events: none; z-index: 3;
   }
   .cx i {
-    font-style: normal; color: #ff8fa3;
+    font-style: normal;
+    /* 字體與輸入時一致（input 原始樣式）；顏色改鎖定紅 */
+    font-family: Rajdhani, sans-serif; font-size: 2rem; font-weight: 600;
+    color: #ff4757;
     text-shadow: 0 0 8px rgba(255,46,77,.45);
     transition: color .08s;
   }
@@ -233,8 +236,8 @@ export function sharePageHtml(s: SharePageState): string {
   .cx.scan::before {
     content: ""; position: absolute; top: 6%; bottom: 6%; width: 2.4rem;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent);
-    filter: blur(1.5px); pointer-events: none;
-    animation: cxScan .52s linear 1;
+    filter: blur(1.5px); pointer-events: none; opacity: 0;
+    animation: cxScan .52s linear 1 forwards; /* 結束停在 opacity 0，不殘留 */
   }
   @keyframes cxScan {
     0% { left: 0%; opacity: 0; }
