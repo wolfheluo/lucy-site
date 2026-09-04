@@ -438,8 +438,7 @@ export function sharePageHtml(s: SharePageState): string {
         });
       }
 
-      // 鎖定倒數：以 server 絕對 lockUntil 每秒更新；歸零自動解除（reload 回正常頁）。
-      // 每秒 tick 同時驅動亂碼重寫（__cxTick）——刷新與秒數倒數同步。
+      // 鎖定倒數：以 server 絕對 lockUntil 每秒更新；歸零自動解除（reload 回正常頁）
       (function lockCountdown() {
         var b = document.body;
         if (!b.classList.contains("locked")) return;
@@ -452,7 +451,6 @@ export function sharePageHtml(s: SharePageState): string {
           if (rem !== lastRem) {
             lastRem = rem;
             if (el.textContent !== String(rem)) el.textContent = rem;
-            if (rem > 0 && window.__cxTick) window.__cxTick();
           }
           if (rem <= 0) { setTimeout(function () { location.reload(); }, 400); return; }
           setTimeout(tick, 250);
@@ -533,9 +531,8 @@ export function sharePageHtml(s: SharePageState): string {
           for (var k = 0; k < 4; k++) cells[k].textContent = rand();
         }
 
-        // 灌入/重寫共用等速（每字 125ms）；後續每輪由倒數 tick 同步驅動
+        // 灌入/重寫共用等速（每字 125ms）；後續每 2 秒刷新一輪（倒數維持每秒）
         var CELL_TICK = 125;
-        var started = false;
         function typeIn() {
           var i = 0;
           var iv = setInterval(function () {
@@ -545,7 +542,7 @@ export function sharePageHtml(s: SharePageState): string {
               clearInterval(iv);
               pin.blur();
               cool();
-              started = true;
+              setInterval(reduced ? plainRewrite : rewrite, 2000);
             }
           }, CELL_TICK);
         }
@@ -554,7 +551,6 @@ export function sharePageHtml(s: SharePageState): string {
         setTimeout(function () {
           build(4);
           typeIn();
-          window.__cxTick = reduced ? plainRewrite : rewrite;
         }, 700);
       })();
     })();
