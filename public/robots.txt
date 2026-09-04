@@ -1,7 +1,6 @@
 # wolfheluo.com robots.txt
-# 公開內容全部允許爬取；私人工具管理頁（登入牆）不給索引
+# 公開內容全部允許爬取
 User-agent: *
 Allow: /
-Disallow: /tools/file-vault
 
 Sitemap: https://wolfheluo.com/sitemap.xml
