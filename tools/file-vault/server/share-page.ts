@@ -224,6 +224,23 @@ export function sharePageHtml(s: SharePageState): string {
   body.locked .err { color: #ff8094; }
   body.locked .err b { font-weight: 700; color: #ff5c74;
     font-variant-numeric: tabular-nums; }
+  /* 每秒亂碼重寫：字元跳動 + clip 切片震盪（input 內容換新瞬間） */
+  body.locked input.rewriting {
+    animation: lockPulse 1.3s ease-in-out infinite,
+               rewriteGlitch .34s steps(2) 1;
+  }
+  @keyframes rewriteGlitch {
+    0%   { transform: none;            clip-path: inset(0 0 0 0); color: #fff; }
+    20%  { transform: translate(-3px,1px) skewX(-5deg);
+           clip-path: inset(18% 0 58% 0); }
+    40%  { transform: translate(3px,-1px);
+           clip-path: inset(62% 0 8% 0);  color: #ff5c74; }
+    60%  { transform: translate(-2px,0) skewX(4deg);
+           clip-path: inset(6% 0 64% 0); }
+    80%  { transform: translate(2px,1px);
+           clip-path: inset(48% 0 22% 0); }
+    100% { transform: none;            clip-path: inset(0 0 0 0); }
+  }
   @media (prefers-reduced-motion: reduce) {
     body.denied::after, body.denied .panel, body.denied .file-name,
     body.denied input, .err { animation: none !important; }
@@ -425,22 +442,32 @@ export function sharePageHtml(s: SharePageState): string {
         tick();
       })();
 
-      // 紅光掃過後：輸入框「自己開始輸入亂碼」——自動灌入，不讓使用者輸入
+      // 紅光掃過後：輸入框自動灌入 4 字亂碼 → 之後每秒整組重寫（glitch 動畫）
       (function corruptPin() {
         var b = document.body;
         if (!b.classList.contains("locked")) return;
         var pin = document.getElementById("pin");
         if (!pin) return;
-        // sweep 完成（delay .15s + dur .7s）後開始；sweep 與灌入重疊會搶焦點視覺
+        var CH = "@#$%&*?!+<=>[]{}";
+        var rand = function () {
+          return CH.charAt(Math.floor(Math.random() * CH.length));
+        };
+        // sweep 完成（delay .15s + dur .7s）後開始灌入
         setTimeout(function () {
-          var CH = "@#$%&*?!+<=>[]{}";
           var i = 0;
           var iv = setInterval(function () {
-            pin.value += CH.charAt(Math.floor(Math.random() * CH.length));
+            pin.value += rand();
             i += 1;
             if (i >= 4) {
               clearInterval(iv);
               pin.blur();
+              // 每秒整組重寫（換字瞬間 retrigger glitch）
+              setInterval(function () {
+                pin.classList.remove("rewriting");
+                void pin.offsetWidth; // reflow 讓動畫可重播
+                pin.value = rand() + rand() + rand() + rand();
+                pin.classList.add("rewriting");
+              }, 1000);
             }
           }, 140);
         }, 1050);
