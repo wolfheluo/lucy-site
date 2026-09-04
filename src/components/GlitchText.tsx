@@ -43,15 +43,27 @@ export default function GlitchText({
   const [done, setDone] = useState(instant);
   const [jitterKey, setJitterKey] = useState(0);
   const beganRef = useRef(false);
+  const prevTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (instant) {
       setOut(text);
       setDone(true);
+      prevTextRef.current = text;
       return;
     }
-    if (!trigger || beganRef.current) return;
+    const prev = prevTextRef.current;
+    prevTextRef.current = text;
+    const textChanged = prev !== null && prev !== text;
+    // 已解碼過且文字沒變 → 不重播；未觸發（inView/start）且非文字變更 → 等觸發
+    if (beganRef.current && !textChanged) return;
+    if (!trigger && !textChanged) return;
     beganRef.current = true;
+    // 文字變更重播：done 重設 → dec 層回到亂碼解碼過程
+    if (textChanged) {
+      setDone(false);
+      setOut("");
+    }
 
     let raf = 0;
     const t0 = performance.now() + delayMs;

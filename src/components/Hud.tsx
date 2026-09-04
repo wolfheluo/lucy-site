@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { profile } from "../content";
 import { sfx } from "../audio/engine";
+import GlitchText from "./GlitchText";
 
 const LINKS: [string, string][] = [
   ["about", "ABOUT"],
@@ -50,21 +51,28 @@ interface HudProps {
 
 export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, reduced }: HudProps) {
   // DeepSeek CNY 餘額（CONTACT 右側；查不到/無 key → null 不顯示）
+  // 60s 輪詢（server 端同 60s cache）；值變 → GlitchText 亂碼解碼重播
   const [dsBalance, setDsBalance] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch("/api/deepseek/balance")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((b) => {
-        if (alive && b && b.ok === true && typeof b.cny === "number") {
-          setDsBalance(b.cny.toFixed(2));
-        }
-      })
-      .catch(() => {
-        /* 查不到就不顯示 */
-      });
+    const load = () =>
+      fetch("/api/deepseek/balance")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b) => {
+          if (!alive || !b || b.ok !== true || typeof b.cny !== "number") return;
+          setDsBalance((prev) => {
+            const next = b.cny.toFixed(2);
+            return prev === next ? prev : next; // 值沒變不觸發 re-decode
+          });
+        })
+        .catch(() => {
+          /* 查不到就不顯示 */
+        });
+    load();
+    const t = setInterval(load, 60_000);
     return () => {
       alive = false;
+      clearInterval(t);
     };
   }, []);
 
@@ -94,7 +102,11 @@ export default function Hud({ visible, fxOn, onToggleFx, ambOn, onToggleAmb, red
               {label}
             </a>
           ))}
-          {dsBalance !== null && <span className="hud-balance">{dsBalance}</span>}
+          {dsBalance !== null && (
+            <span className="hud-balance">
+              <GlitchText text={dsBalance} instant={reduced} hover />
+            </span>
+          )}
         </nav>
       </div>
 
