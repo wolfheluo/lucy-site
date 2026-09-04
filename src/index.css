@@ -481,6 +481,59 @@ a { color: inherit; text-decoration: none; }
 .bp:hover .bp-cell { border-color: rgba(168, 230, 255, 0.45); }
 .bp:hover .bp-cell.dot { border: none; }
 
+/* MatrixDecode：矩陣掃描解密（nav 餘額；浮層向下展開的協定小窗） */
+.md { display: inline-block; vertical-align: middle; line-height: 1; }
+.md-idle { position: relative; display: inline-flex; gap: 2px; }
+.md-ph {
+  display: inline-block; min-width: 0.56em; text-align: center;
+  color: rgba(160, 215, 255, 0.28); font-weight: 500;
+}
+.md-ph-dot { min-width: 0.4em; color: rgba(160, 215, 255, 0.4); }
+.md-value { color: var(--ice); font-weight: 500; text-shadow: 0 0 12px rgba(168, 230, 255, 0.35); }
+.md:hover .md-value { color: var(--cold); }
+.md-matrix {
+  position: absolute; top: calc(100% + 10px); right: -2px; z-index: 60;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 7px 10px;
+  background: rgba(5, 7, 10, 0.94);
+  border: 1px solid rgba(140, 205, 255, 0.28);
+  border-radius: 3px;
+  box-shadow: 0 0 18px rgba(95, 184, 230, 0.18), inset 0 0 14px rgba(140, 205, 255, 0.05);
+  white-space: nowrap;
+  animation: mdOpen 0.18s ease-out;
+  transform-origin: top right;
+}
+.md-matrix.fading { opacity: 0; transition: opacity 0.35s ease; animation: none; }
+@keyframes mdOpen {
+  0% { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.md-row {
+  font-size: inherit; font-weight: 500; letter-spacing: 0.14em;
+  color: rgba(140, 205, 255, 0.4); line-height: 1.25;
+}
+.md-row-target {
+  color: var(--ice);
+  text-shadow: 0 0 8px rgba(168, 230, 255, 0.45);
+}
+/* 掃描光帶：由上往下掃過 3 行（目標行固化同步） */
+.md-scan {
+  position: absolute; left: 2px; right: 2px;
+  height: 1.25em;
+  background: linear-gradient(180deg, transparent, rgba(168, 230, 255, 0.16) 45%, rgba(168, 230, 255, 0.42) 50%, rgba(168, 230, 255, 0.16) 55%, transparent);
+  animation: mdScan 0.9s linear forwards;
+  pointer-events: none;
+}
+@keyframes mdScan {
+  0% { top: 2px; opacity: 0; }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: calc(100% - 1.25em - 2px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-matrix, .md-scan { animation: none; }
+}
+
 .hud-progress {
   position: absolute;
   top: 0;

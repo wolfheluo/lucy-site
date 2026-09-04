@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { profile } from "../content";
 import { sfx } from "../audio/engine";
-import BreachBuffer from "./BreachBuffer";
+import MatrixDecode from "./MatrixDecode";
 
 const LINKS: [string, string][] = [
   ["about", "ABOUT"],
@@ -114,9 +114,8 @@ export default function Hud({
           ))}
           {dsBalance !== null && (
             <span className="hud-balance">
-              {/* Breach Protocol 逐格鎖定（與主站 GlitchText 全行解碼區隔）：
-                  start=bootGone 等 boot 碎裂退場才破解；hover 可重播 */}
-              <BreachBuffer text={dsBalance} instant={reduced} hover start={bootGone} />
+              {/* 矩陣掃描解密（數字藏矩陣、掃描線逐行揭開；boot 碎裂退場後播放） */}
+              <MatrixDecode text={dsBalance} instant={reduced} hover start={bootGone} />
             </span>
           )}
         </nav>
