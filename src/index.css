@@ -451,10 +451,35 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
   cursor: default;
 }
-.hud-balance .glitch-box { display: inline-block; vertical-align: baseline; }
-.hud-balance .glitch-box .dec,
-.hud-balance .glitch-box .ghost { color: inherit; }
+/* Breach Protocol buffer：逐格鎖定（2026-09 取代 GlitchText——全行亂碼解碼
+   在站上重複率太高；協定 buffer 逐 token 鎖定為不同語彙） */
 .hud-balance:hover { color: var(--cold); } /* 與 nav a:hover 同色系 */
+.bp { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; }
+.bp-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.05em; height: 1.3em;
+  font-size: inherit; font-weight: 500; color: var(--ice);
+  border: 1px solid rgba(160, 215, 255, 0.18);
+  background: rgba(140, 205, 255, 0.05);
+}
+.bp-cell.locked {
+  color: var(--cold);
+  border-color: rgba(168, 230, 255, 0.5);
+  box-shadow: 0 0 8px rgba(168, 230, 255, 0.28), inset 0 0 4px rgba(168, 230, 255, 0.12);
+  animation: bpLockFlash 0.22s ease-out;
+}
+@keyframes bpLockFlash {
+  0% { transform: scale(1.18); filter: brightness(2); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+/* 小數點格：無框無閃，恆顯示 */
+.bp-cell.dot {
+  width: 0.5em; border: none; background: none; box-shadow: none;
+  color: var(--dim); animation: none;
+}
+/* hover：整組格框亮起（breach 就緒感） */
+.bp:hover .bp-cell { border-color: rgba(168, 230, 255, 0.45); }
+.bp:hover .bp-cell.dot { border: none; }
 
 .hud-progress {
   position: absolute;
