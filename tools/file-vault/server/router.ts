@@ -9,7 +9,7 @@
 //      DELETE /share/:id       撤銷分享
 //    /s/*                      公開分享
 //      GET    /:shareId        分享頁（精簡 HTML）
-//      POST   /:shareId        pin 驗證 → 成功即串流下載（rate-limit 10/15min）
+//      POST   /:shareId        pin 驗證 → 成功即串流下載（錯 pin 3 次鎖 300s，鎖 IP）
 // =====================================================================
 import fs from "node:fs";
 import path from "node:path";
@@ -18,7 +18,6 @@ import busboy from "busboy";
 import { Hono } from "hono";
 import type { ServerToolContext } from "../../types.js";
 import { requireAuth } from "../../../server/auth.js";
-import { makeRateLimiter } from "../../../server/rate-limit.js";
 import { clientIp } from "../../../server/request-ip.js";
 import { Vault } from "./vault.js";
 import { fmtSize, sharePageHtml } from "./share-page.js";
@@ -26,8 +25,9 @@ import type { UploadResultItem } from "../types.js";
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024; // 2GB（與 nginx client_max_body_size 一致）
 const MAX_FORM_BODY = 64 * 1024; // H4：公開 pin 表單上限（避免 parseBody 整包讀入記憶體）
-const PIN_RATE_MAX = 10;
-const PIN_RATE_WINDOW_MS = 15 * 60 * 1000;
+/** 分享 pin 防護：錯 pin 才計，第 PIN_MAX_FAILS 次錯當下鎖 PIN_LOCK_MS（起算滿） */
+const PIN_MAX_FAILS = 3;
+const PIN_LOCK_MS = 300 * 1000;
 const CLEANUP_INTERVAL_MS = 3600 * 1000; // 每小時
 
 function streamFile(c: import("hono").Context, vault: Vault, storedName: string, originalName: string, size: number) {
@@ -50,10 +50,15 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     db: ctx.db,
     dir: path.join(ctx.dataDir, "vault"),
   });
-  const pinLimiter = makeRateLimiter(ctx.db, {
-    max: PIN_RATE_MAX,
-    windowMs: PIN_RATE_WINDOW_MS,
-  });
+  // 分享 pin 防護（錯 pin 才計；lock_until 起算滿 300s；鎖定期任何提交都拒）
+  const stmtGuard = ctx.db.prepare(
+    `SELECT fail_count, lock_until FROM share_pin_guards WHERE key = ?`
+  );
+  const stmtUpsertGuard = ctx.db.prepare(
+    `INSERT INTO share_pin_guards (key, fail_count, lock_until) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET fail_count = excluded.fail_count, lock_until = excluded.lock_until`
+  );
+  const stmtClearGuard = ctx.db.prepare(`DELETE FROM share_pin_guards WHERE key = ?`);
 
   // 啟動即清一次 + 每小時排程（unref：不擋 process exit）
   vault.cleanupExpired();
@@ -275,14 +280,22 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     }
 
     const ip = clientIp(c, ctx.trustProxy);
-    const limit = pinLimiter.hit(`pin:${ip}:${shareId}`);
-    if (!limit.allowed) {
+    const gkey = `pin:${ip}:${shareId}`;
+    const guard = stmtGuard.get(gkey) as
+      | { fail_count: number; lock_until: number }
+      | undefined;
+    const now = Date.now();
+    // 鎖定期（lock_until 起算滿 300s）：任何提交（含對 pin）都拒——回剩餘秒
+    // + 絕對 lockUntil（前端精確倒數、refresh 後再提交同步）
+    if (guard && guard.lock_until > now) {
+      const lockedSec = Math.ceil((guard.lock_until - now) / 1000);
       return c.html(
         sharePageHtml({
           shareId,
           fileName: rec.originalName,
           sizeFmt: fmtSize(rec.size),
-          lockedSec: limit.retryAfterSec,
+          lockedSec,
+          lockUntil: guard.lock_until,
         }),
         429
       );
@@ -292,16 +305,34 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
     const pin = String((body as Record<string, unknown>).pin ?? "").trim();
     const ok = vault.verifyShare(shareId, pin);
     if (!ok) {
+      const fails = (guard?.fail_count ?? 0) + 1;
+      if (fails >= PIN_MAX_FAILS) {
+        // 第 PIN_MAX_FAILS 次錯：當下鎖定、起算滿 PIN_LOCK_MS
+        const lockUntil = now + PIN_LOCK_MS;
+        stmtUpsertGuard.run(gkey, fails, lockUntil);
+        return c.html(
+          sharePageHtml({
+            shareId,
+            fileName: rec.originalName,
+            sizeFmt: fmtSize(rec.size),
+            lockedSec: Math.round(PIN_LOCK_MS / 1000),
+            lockUntil,
+          }),
+          429
+        );
+      }
+      stmtUpsertGuard.run(gkey, fails, 0);
       return c.html(
         sharePageHtml({
           shareId,
           fileName: rec.originalName,
           sizeFmt: fmtSize(rec.size),
-          error: "PIN 錯誤，請重試",
+          error: `PIN 錯誤，請重試（剩餘 ${PIN_MAX_FAILS - fails} 次）`,
         }),
         401
       );
     }
+    stmtClearGuard.run(gkey); // 對 pin：錯誤計數重置
 
     const resp = streamFile(c, vault, rec.storedName, rec.originalName, rec.size);
     if (!resp) {

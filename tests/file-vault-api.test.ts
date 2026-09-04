@@ -217,7 +217,7 @@ describe("file-vault 分享與公開下載", () => {
     expect(buf.equals(content)).toBe(true);
   });
 
-  it("pin 錯 10 次 → 429 鎖定（專用 IP）", async () => {
+  it("錯 pin 3 次 → 第 3 次即 429 鎖定 300 秒；鎖定期內對 pin 也拒絕（專用 IP）", async () => {
     const cookie = await login();
     const { json } = await upload(cookie, [{ name: "ratelimit.txt", content: "x" }]);
     const id = json.files[0].file!.id;
@@ -226,19 +226,51 @@ describe("file-vault 分享與公開下載", () => {
       pin: string;
     };
     const ip = "198.51.100.99";
-    const tryPin = async () =>
+    const post = (pin: string) =>
       app.request(`/s/${share.shareId}`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip },
-        body: `pin=9999`,
+        body: `pin=${pin}`,
       });
-    for (let i = 0; i < 10; i++) {
-      const r = await tryPin();
-      expect(r.status, `第 ${i + 1} 次`).toBe(401);
+    // 第 1、2 次錯 → 401（未鎖）
+    for (let i = 0; i < 2; i++) {
+      expect((await post("9999")).status, `第 ${i + 1} 次`).toBe(401);
     }
-    const locked = await tryPin();
+    // 第 3 次錯 → 當下 429 鎖定
+    const locked = await post("9999");
     expect(locked.status).toBe(429);
-    expect(await locked.text()).toContain("鎖定");
+    const lockedText = await locked.text();
+    expect(lockedText).toContain("鎖定");
+    expect(lockedText).toContain('<b id="lockcd">300</b>'); // 倒數起點 300
+    // 鎖定期（lockUntil 絕對時間戳給前端倒數）內：輸對 pin 也 429
+    expect(lockedText).toContain("lockUntil");
+    const correct = await post(share.pin);
+    expect(correct.status).toBe(429);
+  });
+
+  it("錯 2 次後輸對 pin → 計數重置，再錯滿 3 次才鎖", async () => {
+    const cookie = await login();
+    const { json } = await upload(cookie, [{ name: "reset.txt", content: "x" }]);
+    const id = json.files[0].file!.id;
+    const share = (await (await createShare(cookie, id)).json()).share as {
+      shareId: string;
+      pin: string;
+    };
+    const ip = "198.51.100.77";
+    const post = (pin: string) =>
+      app.request(`/s/${share.shareId}`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": ip },
+        body: `pin=${pin}`,
+      });
+    expect((await post("0000")).status).toBe(401);
+    expect((await post("0000")).status).toBe(401);
+    // 輸對 → 重置計數 + 下載成功
+    expect((await post(share.pin)).status).toBe(200);
+    // 重新累積 3 次錯誤 → 鎖
+    expect((await post("1111")).status).toBe(401);
+    expect((await post("2222")).status).toBe(401);
+    expect((await post("3333")).status).toBe(429);
   });
 
   it("分享撤銷後 /s/ 404；刪檔後分享頁 404", async () => {

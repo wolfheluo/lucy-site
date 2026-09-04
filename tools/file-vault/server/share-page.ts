@@ -10,8 +10,10 @@ export interface SharePageState {
   fileName?: string;
   sizeFmt?: string;
   error?: string;
-  /** rate-limit 鎖定（秒） */
+  /** 鎖定剩餘秒（429 回應） */
   lockedSec?: number;
+  /** 鎖定到期絕對時間戳（epoch ms，前端精確倒數用） */
+  lockUntil?: number;
 }
 
 const FONT =
@@ -29,11 +31,22 @@ export function fmtSize(n: number): string {
 }
 
 export function sharePageHtml(s: SharePageState): string {
-  const deniedClass = s.shareId && (s.error || s.lockedSec) ? ' class="denied"' : '';
+  // 錯 PIN → denied（入侵反應動畫）；鎖定 → locked（能量封鎖 + 倒數）
+  const bodyCls = s.shareId
+    ? s.lockedSec
+      ? `locked" data-lock-until="${s.lockUntil ?? 0}`
+      : s.error
+        ? "denied"
+        : ""
+    : "";
+  const bodyAttr = bodyCls ? ` class="${bodyCls}"` : "";
   const title = s.shareId ? "FILE VAULT // 檔案保險箱" : "404 // 連結失效";
-  const errLine = s.lockedSec
-    ? `嘗試次數過多，已鎖定 ${s.lockedSec} 秒`
-    : s.error ?? "";
+  // locked：倒數 HTML 原樣（數字安全）；error：純文字需 escape
+  const errHtml = s.lockedSec
+    ? `嘗試次數過多，已鎖定 <b id="lockcd">${s.lockedSec}</b> 秒`
+    : s.error
+      ? escapeHtml(s.error)
+      : "";
 
   const body = !s.shareId
     ? `<div class="dead">LINK EXPIRED // 連結不存在或已自毀</div>`
@@ -43,12 +56,15 @@ export function sharePageHtml(s: SharePageState): string {
       <div class="file-size">${s.sizeFmt ?? ""}</div>
     </div>
     <form method="post" autocomplete="off">
-      <label for="pin">ENTER PIN</label>
+      <label for="pin">
+        ENTER PIN
+        ${s.lockedSec ? '<span class="lock-badge">⛓ LOCKED</span>' : ""}
+      </label>
       <input id="pin" name="pin" inputmode="numeric" maxlength="4"
-             placeholder="••••" required autofocus />
-      <button type="submit">DECRYPT ▸</button>
+             placeholder="••••" required autofocus${s.lockedSec ? " disabled" : ""} />
+      <button type="submit"${s.lockedSec ? " disabled" : ""}>DECRYPT ▸</button>
     </form>
-    ${errLine ? `<div class="err">✕ ${escapeHtml(errLine)}</div>` : ""}
+    ${errHtml ? `<div class="err">✕ ${errHtml}</div>` : ""}
     <div class="note">此檔案將於分享後 72 小時自動湮滅</div>`;
 
   return `<!doctype html>
@@ -169,9 +185,49 @@ export function sharePageHtml(s: SharePageState): string {
     50% { border-color: rgba(255,46,77,1); box-shadow: 0 0 40px rgba(255,46,77,.6); }
   }
   body.denied .err { color: #ff8094; }
+  /* ── 鎖定：能量封鎖（body.locked，429 頁面）── */
+  body.locked form { position: relative; }
+  body.locked form::before {
+    content: ""; position: absolute; top: -8px; bottom: -8px; left: 0;
+    width: 40%; pointer-events: none; z-index: 2;
+    background: linear-gradient(90deg, transparent,
+      rgba(168,230,255,.28), rgba(255,46,77,.45), transparent);
+    animation: lockSweep .75s cubic-bezier(.4,0,.2,1) 1;
+  }
+  @keyframes lockSweep {
+    0% { left: -45%; filter: blur(6px); }
+    60% { filter: blur(0); }
+    100% { left: 115%; filter: blur(6px); }
+  }
+  body.locked label { color: var(--pink, #ff8094); }
+  .lock-badge {
+    display: inline-block; margin-left: .6rem; font-size: .6rem;
+    letter-spacing: .28em; color: #ff8094;
+    text-shadow: 0 0 12px rgba(255,46,77,.8);
+    animation: lockBlink 1.15s ease-in-out infinite;
+  }
+  @keyframes lockBlink {
+    0%, 100% { opacity: 1; text-shadow: 0 0 12px rgba(255,46,77,.8); }
+    50% { opacity: .45; text-shadow: 0 0 4px rgba(255,46,77,.35); }
+  }
+  body.locked input {
+    border-color: rgba(255,46,77,.6);
+    background: rgba(255,46,77,.07);
+    color: #ff8fa3; cursor: not-allowed;
+    animation: lockPulse 1.3s ease-in-out infinite;
+  }
+  body.locked input::placeholder { color: rgba(255,128,148,.35); }
+  @keyframes lockPulse {
+    0%, 100% { box-shadow: 0 0 6px rgba(255,46,77,.25); border-color: rgba(255,46,77,.5); }
+    50% { box-shadow: 0 0 22px rgba(255,46,77,.5); border-color: rgba(255,46,77,.95); }
+  }
+  body.locked .err { color: #ff8094; }
+  body.locked .err b { font-weight: 700; color: #ff5c74;
+    font-variant-numeric: tabular-nums; }
   @media (prefers-reduced-motion: reduce) {
     body.denied::after, body.denied .panel, body.denied .file-name,
     body.denied input, .err { animation: none !important; }
+    body.locked form::before, body.locked input, .lock-badge { animation: none !important; }
   }
   .note { margin-top:1.6rem; text-align:center; font-size:.68rem; letter-spacing:.3em;
     color: var(--faint); }
@@ -249,7 +305,7 @@ export function sharePageHtml(s: SharePageState): string {
   }
 </style>
 </head>
-<body${deniedClass}>
+<body${bodyAttr}>
   <div id="rain" aria-hidden="true"></div>
   <div class="scanbar" aria-hidden="true"></div>
   <main class="panel">
@@ -352,6 +408,22 @@ export function sharePageHtml(s: SharePageState): string {
           return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
         });
       }
+
+      // 鎖定倒數：以 server 絕對 lockUntil 每秒更新；歸零自動解除（reload 回正常頁）
+      (function lockCountdown() {
+        var b = document.body;
+        if (!b.classList.contains("locked")) return;
+        var until = parseInt(b.getAttribute("data-lock-until") || "0", 10);
+        var el = document.getElementById("lockcd");
+        if (!until || !el) return;
+        function tick() {
+          var rem = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+          if (el.textContent !== String(rem)) el.textContent = rem;
+          if (rem <= 0) { setTimeout(function () { location.reload(); }, 400); return; }
+          setTimeout(tick, 250);
+        }
+        tick();
+      })();
     })();
   </script>
 </body>
