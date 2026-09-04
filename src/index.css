@@ -739,6 +739,22 @@ html.cursor-none * { cursor: none !important; }
   line-height: 1.9;
 }
 .boot .boot-lines .ok { color: var(--ice); }
+/* 碎裂退場（2026-09：framer exit 卡住 → .boot 殘留擋全站點擊——同 RouteTransition 黑屏根因）
+   CSS animation 保證播完 → animationend → onGone 移除；timeout 900ms 兜底 */
+.boot.exiting {
+  animation: bootRip 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+@keyframes bootRip {
+  0%   { clip-path: inset(0 0 0 0);    opacity: 1; }
+  25%  { clip-path: inset(8% 0 42% 0); opacity: 1; }
+  45%  { clip-path: inset(0 0 0 0);    opacity: 0.5; }
+  65%  { clip-path: inset(46% 0 6% 0); opacity: 1; }
+  100% { clip-path: inset(0 0 100% 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot.exiting { animation: none; }
+}
 .boot .skip-hint {
   font-family: var(--font-en);
   font-size: 0.7rem;

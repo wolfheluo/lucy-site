@@ -3,7 +3,7 @@
 //  逐行終端輸出，完成後 glitch 碎裂退場。可點擊/按鍵跳過。
 // =====================================================================
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type AnimationEvent as ReactAnimationEvent } from "react";
 import { profile } from "../content";
 import { sfx } from "../audio/engine";
 
@@ -14,15 +14,45 @@ const LINES: { t: string; ok: boolean }[] = [
   { t: "> ACCESS GRANTED", ok: true },
 ];
 
-export default function BootScreen({ onDone }: { onDone: () => void }) {
+export default function BootScreen({
+  onDone,
+  onGone,
+}: {
+  onDone: () => void;
+  /** 碎裂退場播完才呼叫（移除自身；framer exit 不參與，CSS animation 保證播完） */
+  onGone: () => void;
+}) {
   const [pct, setPct] = useState(0);
   const [lineCount, setLineCount] = useState(0);
+  const [exiting, setExiting] = useState(false);
   const doneRef = useRef(false);
+  const goneRef = useRef(false);
 
+  /** 內容顯示（onDone → booted）：進度滿 / 點擊 / 按鍵跳過都走這 → 觸發碎裂退場 */
   const finish = () => {
     if (doneRef.current) return;
     doneRef.current = true;
     onDone();
+    setExiting(true);
+  };
+
+  /** 碎裂 animation 播完（animationend / timeout 兜底）→ 移除自身 */
+  const gone = () => {
+    if (goneRef.current) return;
+    goneRef.current = true;
+    onGone();
+  };
+
+  // 碎裂 timeout 兜底：animationend 沒 fire（reduced-motion 全域關 animation）→ 900ms 強制
+  useEffect(() => {
+    if (!exiting) return;
+    const t = setTimeout(gone, 900);
+    return () => clearTimeout(t);
+  }, [exiting]);
+
+  // 碎裂動畫完成（只認 bootRip；防子元素 animation bubble）
+  const handleAnimEnd = (e: ReactAnimationEvent) => {
+    if (e.animationName === "bootRip") gone();
   };
 
   useEffect(() => {
@@ -77,19 +107,10 @@ export default function BootScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <motion.div
-      className="boot"
+      className={`boot${exiting ? " exiting" : ""}`}
       onClick={finish}
-      exit={{
-        clipPath: [
-          "inset(0 0 0 0)",
-          "inset(8% 0 42% 0)",
-          "inset(0 0 0 0)",
-          "inset(46% 0 6% 0)",
-          "inset(0 0 100% 0)",
-        ],
-        opacity: [1, 1, 0.5, 1, 0],
-        transition: { duration: 0.55, times: [0, 0.25, 0.45, 0.65, 1] },
-      }}
+      onAnimationEnd={handleAnimEnd}
+      initial={false}
     >
       <div className="boot-os">
         {pct >= 12 ? profile.bootOs : "▚▚▚▚▚▚▚▚▚▚"}

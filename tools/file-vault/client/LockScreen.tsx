@@ -130,6 +130,11 @@ export default function LockScreen({ onUnlocked }: { onUnlocked: () => void }) {
     setHacking(false);
     setShards(generateShards());
     setBreaking(true);
+    // 兜底（2026-09 framer-exit 脆弱盤點）：inner exit 的 onExitComplete 若卡住不 fire
+    // → 碎裂永不重生、LockScreen 卡死。1.2s 後仍 breaking → 強制重生。
+    window.setTimeout(() => {
+      if (breakingRef.current && !leavingRef.current) onBrokenDone();
+    }, 1200);
   };
 
   /** 破碎 exit 完成 → 重生（新世代） */

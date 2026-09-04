@@ -3,7 +3,6 @@
 //  boot / 3D 場景 / 內容段落 / HUD / CRT / 游標 —— 全部保留原樣
 // =====================================================================
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { AnimatePresence } from "framer-motion";
 // M9：3D 場景（three / drei / postprocessing）獨立 chunk，首載不阻塞
 const Scene3D = lazy(() => import("./three/Scene3D"));
 import { supportsWebGL, useCoarsePointer, usePrefersReducedMotion } from "./hooks";
@@ -110,9 +109,13 @@ export default function PortfolioPage() {
 
       {fxOn && !reduced && !coarse && booted && <CustomCursor />}
 
-      <AnimatePresence onExitComplete={() => setBootGone(true)}>
-        {!booted && !reduced && <BootScreen key="boot" onDone={() => setBooted(true)} />}
-      </AnimatePresence>
+      {!bootGone && !reduced && (
+        <BootScreen
+          key="boot"
+          onDone={() => setBooted(true)}
+          onGone={() => setBootGone(true)}
+        />
+      )}
     </>
   );
 }
