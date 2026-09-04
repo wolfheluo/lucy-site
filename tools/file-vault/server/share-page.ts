@@ -192,7 +192,7 @@ export function sharePageHtml(s: SharePageState): string {
     width: 40%; pointer-events: none; z-index: 2;
     background: linear-gradient(90deg, transparent,
       rgba(168,230,255,.28), rgba(255,46,77,.45), transparent);
-    animation: lockSweep .7s cubic-bezier(.4,0,.2,1) .15s 1 forwards;
+    animation: lockSweep .7s cubic-bezier(.4,0,.2,1) 1 forwards;
   }
   @keyframes lockSweep {
     0% { left: -45%; filter: blur(6px); }
@@ -438,16 +438,22 @@ export function sharePageHtml(s: SharePageState): string {
         });
       }
 
-      // 鎖定倒數：以 server 絕對 lockUntil 每秒更新；歸零自動解除（reload 回正常頁）
+      // 鎖定倒數：以 server 絕對 lockUntil 每秒更新；歸零自動解除（reload 回正常頁）。
+      // 每秒 tick 同時驅動亂碼重寫（__cxTick）——刷新與秒數倒數同步。
       (function lockCountdown() {
         var b = document.body;
         if (!b.classList.contains("locked")) return;
         var until = parseInt(b.getAttribute("data-lock-until") || "0", 10);
         var el = document.getElementById("lockcd");
         if (!until || !el) return;
+        var lastRem = null;
         function tick() {
           var rem = Math.max(0, Math.ceil((until - Date.now()) / 1000));
-          if (el.textContent !== String(rem)) el.textContent = rem;
+          if (rem !== lastRem) {
+            lastRem = rem;
+            if (el.textContent !== String(rem)) el.textContent = rem;
+            if (rem > 0 && window.__cxTick) window.__cxTick();
+          }
           if (rem <= 0) { setTimeout(function () { location.reload(); }, 400); return; }
           setTimeout(tick, 250);
         }
@@ -497,7 +503,7 @@ export function sharePageHtml(s: SharePageState): string {
           for (var k = 0; k < cells.length; k++) cells[k].classList.remove("hot");
         }
 
-        // 每秒重寫：光帶掃過 + 字元依序 decode
+        // 每輪重寫：光帶掃過 + 字元依序 decode（CELL_TICK 等速）
         function rewrite() {
           var next = [rand(), rand(), rand(), rand()];
           cool();
@@ -506,7 +512,7 @@ export function sharePageHtml(s: SharePageState): string {
           host.classList.add("scan");
           var k = 0;
           (function step() {
-            if (k >= 4) { setTimeout(cool, 220); return; }
+            if (k >= 4) { setTimeout(cool, 240); return; }
             var tgt = next[k];
             var flips = 0;
             var fiv = setInterval(function () {
@@ -515,9 +521,9 @@ export function sharePageHtml(s: SharePageState): string {
                 clearInterval(fiv);
                 setCell(k, tgt, true);
                 k += 1;
-                setTimeout(step, 55);
+                setTimeout(step, 57);
               } else {
-                setCell(k, flips === 0 ? rand() : rand(), false);
+                setCell(k, rand(), false);
                 flips += 1;
               }
             }, 34);
@@ -527,9 +533,10 @@ export function sharePageHtml(s: SharePageState): string {
           for (var k = 0; k < 4; k++) cells[k].textContent = rand();
         }
 
-        // 首次灌入（紅光 sweep 完成後，逐字 150ms）
-        setTimeout(function () {
-          build(4);
+        // 灌入/重寫共用等速（每字 125ms）；後續每輪由倒數 tick 同步驅動
+        var CELL_TICK = 125;
+        var started = false;
+        function typeIn() {
           var i = 0;
           var iv = setInterval(function () {
             setCell(i, rand(), true);
@@ -538,12 +545,17 @@ export function sharePageHtml(s: SharePageState): string {
               clearInterval(iv);
               pin.blur();
               cool();
-              setTimeout(function () {
-                setInterval(reduced ? plainRewrite : rewrite, 1050);
-              }, 260);
+              started = true;
             }
-          }, 150);
-        }, 1050);
+          }, CELL_TICK);
+        }
+
+        // 首次灌入：紅光 sweep 結束（0.7s）即開始——無額外 pause，節奏與後續一致
+        setTimeout(function () {
+          build(4);
+          typeIn();
+          window.__cxTick = reduced ? plainRewrite : rewrite;
+        }, 700);
       })();
     })();
   </script>
