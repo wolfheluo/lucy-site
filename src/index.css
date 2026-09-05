@@ -697,6 +697,17 @@ html.cursor-none * { cursor: none !important; }
 .cursor-hot .cursor-cross::after { background: var(--pink); }
 .cursor-hidden { display: none; }
 
+/* ---------- 合成層效能：常駐/JS 驅動 transform 元素固定獨立合成層 ----------
+   一次建層、只動 transform（純合成不 repaint），避免瀏覽器每幀「升層/降層」
+   決策在部分 GPU/driver 上造成的整屏閃爍（flicker）。 */
+.fx-layer .scanbar,
+.fx-layer .noise,
+.hud-progress i,
+.cursor-cross,
+.cursor-ring {
+  will-change: transform;
+}
+
 /* ---------- glitch text ---------- */
 .glitch-box { position: relative; display: inline-block; white-space: pre-wrap; }
 .glitch-box .ghost { visibility: hidden; display: block; }

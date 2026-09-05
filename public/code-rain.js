@@ -18,22 +18,42 @@
 
     var stopped = false;
 
-    // 批次輸出（避免逐字 DOM 寫入）
+    // 批次輸出（避免逐字 DOM 寫入）：
+    // 增量 appendChild(createTextNode)（M-7），不再每 60ms 整段 textContent += 後 slice（O(n²)）
     var pending = "";
     var lastTimer = null;
     var flushing = false;
+    var totalLen = 0; // 已寫入容器（尚未被裁剪）的字元數——避免每次重讀 textContent
 
     function flush() {
       flushing = false;
       if (stopped || !pending) return;
-      el.textContent += pending;
-      pending = "";
-      if (el.textContent.length > 7000) {
-        el.textContent = el.textContent.slice(2500);
+      // 背景分頁：丟棄累積輸出、不寫 DOM（瀏覽器背景 timer 節流後成本 ≈ 0）
+      if (global.document && global.document.hidden) {
+        pending = "";
+        return;
       }
-      el.scrollTop = el.scrollHeight;
+      var len = pending.length;
+      var node = global.document.createTextNode(pending);
+      el.appendChild(node);
+      pending = "";
+      totalLen += len;
+      // 超過上限：從前端移除最舊文字節點（容器頂部 mask 淡出 → 視覺無感）
+      if (totalLen > 7000) {
+        var child = el.firstChild;
+        while (child && totalLen > 7000) {
+          var next = child.nextSibling;
+          if (child.nodeType === 3) {
+            totalLen -= child.nodeValue ? child.nodeValue.length : 0;
+            el.removeChild(child);
+          }
+          child = next;
+        }
+      }
     }
     function emit(ch) {
+      if (stopped) return;
+      if (global.document && global.document.hidden) return; // 背景分頁直接丟棄
       pending += ch;
       if (!flushing) {
         flushing = true;

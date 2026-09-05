@@ -27,12 +27,23 @@ export default function CustomCursor() {
     let ry = y;
     let hot = false;
     let raf = 0;
+    let running = false;
+    let lastMove = performance.now();
+    const IDLE_MS = 300;
     let prevX = x;
     let prevY = y;
+
+    const startLoop = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(loop);
+    };
 
     const onMove = (e: PointerEvent) => {
       x = e.clientX;
       y = e.clientY;
+      lastMove = performance.now();
+      if (!running) startLoop(); // 靜止停 loop 後，pointermove 重新啟動
     };
 
     const onOver = (e: Event) => {
@@ -57,12 +68,18 @@ export default function CustomCursor() {
       ry += (y - ry) * k;
       cross.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
       ring.style.transform = `translate3d(${rx}px, ${ry}px, 0) translate(-50%, -50%)`;
+      // m-16：指標靜止 ≥300ms 且光圈已收斂（<0.6px）→ 停 loop，不再每幀空轉
+      const settled = Math.abs(x - rx) < 0.6 && Math.abs(y - ry) < 0.6;
+      if (performance.now() - lastMove >= IDLE_MS && settled) {
+        running = false;
+        return;
+      }
       raf = requestAnimationFrame(loop);
     };
 
     window.addEventListener("pointermove", onMove, { passive: true });
     document.addEventListener("pointerover", onOver, true);
-    raf = requestAnimationFrame(loop);
+    startLoop();
 
     return () => {
       document.documentElement.classList.remove("cursor-none");

@@ -42,8 +42,12 @@ export default function GlitchText({
   const [decoding, setDecoding] = useState(false);
   const [done, setDone] = useState(instant);
   const [jitterKey, setJitterKey] = useState(0);
+  const jitterTimer = useRef(0);
   const beganRef = useRef(false);
   const prevTextRef = useRef<string | null>(null);
+
+  // m-17：hover jitter timer 清理（unmount 後不留殘留 setTimeout）
+  useEffect(() => () => window.clearTimeout(jitterTimer.current), []);
 
   useEffect(() => {
     if (instant) {
@@ -114,8 +118,9 @@ export default function GlitchText({
 
   const onEnter = () => {
     if (!hover || done === false) return;
+    window.clearTimeout(jitterTimer.current); // 重啟前清舊 timer → 連續 hover 不提前截斷
     setJitterKey((k) => k + 1);
-    window.setTimeout(() => setJitterKey(0), 320);
+    jitterTimer.current = window.setTimeout(() => setJitterKey(0), 320);
   };
 
   return (

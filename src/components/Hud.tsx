@@ -18,19 +18,65 @@ const LINKS: [string, string][] = [
 function ProgressBar() {
   const barRef = useRef<HTMLElement>(null);
 
+  // M-6：改「scroll/resize/font-load 事件驅動 + rAF 節流」，靜止時 0 工作；
+  // 捲動範圍只在不動時量測快取，不再每幀讀 scrollHeight（強制同步 layout）。
   useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+
+    let max = 0;
+    const measure = () => {
+      max = document.documentElement.scrollHeight - window.innerHeight;
+    };
+
     let raf = 0;
-    const loop = () => {
-      const el = barRef.current;
-      if (el) {
-        const max = document.documentElement.scrollHeight - window.innerHeight;
-        const p = max > 0 ? Math.min(1, window.scrollY / max) : 0;
+    let queued = false;
+    let lastP = -1;
+
+    const apply = () => {
+      queued = false;
+      const p = max > 0 ? Math.min(1, window.scrollY / max) : 0;
+      if (p !== lastP) {
+        lastP = p; // 數值未變不寫 DOM
         el.style.transform = `scaleX(${p})`;
       }
-      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    const request = () => {
+      if (queued) return;
+      queued = true;
+      raf = requestAnimationFrame(apply);
+    };
+
+    const onScroll = () => request();
+    const onRecalc = () => {
+      measure();
+      request();
+    };
+
+    measure();
+    request();
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onRecalc, { passive: true });
+    window.addEventListener("load", onRecalc, { passive: true });
+    const t = window.setTimeout(onRecalc, 800); // 字型/內容載入後校正
+    let alive = true;
+    if (document.fonts?.ready) {
+      document.fonts.ready
+        .then(() => {
+          if (alive) onRecalc();
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      alive = false;
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onRecalc);
+      window.removeEventListener("load", onRecalc);
+      window.clearTimeout(t);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (

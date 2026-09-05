@@ -171,6 +171,34 @@ function CameraRig() {
     look: new THREE.Vector3(2.6, 0.15, 0),
     mouse: new THREE.Vector2(0, 0),
   });
+  // m-15：捲動範圍快取——只在掛載 / resize / load / 字型載入後量測；
+  // frame loop 只讀 window.scrollY（廉價讀取），不再每幀 scrollHeight 強制 layout。
+  const maxScrollRef = useRef(0);
+
+  useEffect(() => {
+    const measure = () => {
+      maxScrollRef.current = document.documentElement.scrollHeight - window.innerHeight;
+    };
+    measure();
+    const onRecalc = () => measure();
+    window.addEventListener("resize", onRecalc, { passive: true });
+    window.addEventListener("load", onRecalc, { passive: true });
+    const t = window.setTimeout(onRecalc, 800); // 字型載入後校正
+    let alive = true;
+    if (document.fonts?.ready) {
+      document.fonts.ready
+        .then(() => {
+          if (alive) onRecalc();
+        })
+        .catch(() => {});
+    }
+    return () => {
+      alive = false;
+      window.removeEventListener("resize", onRecalc);
+      window.removeEventListener("load", onRecalc);
+      window.clearTimeout(t);
+    };
+  }, []);
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -188,7 +216,7 @@ function CameraRig() {
     const dt = Math.min(rawDt, 0.05);
     const s = state.current;
 
-    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const max = maxScrollRef.current;
     const targetP = max > 0 ? clamp01(window.scrollY / max) : 0;
     s.p += (targetP - s.p) * (1 - Math.exp(-dt * 2.4));
 
@@ -244,12 +272,29 @@ function Monowires() {
   );
 }
 
-export default function Scene3D() {
+interface Scene3DProps {
+  /** Boot 碎裂 overlay 未退場前為 false → frameloop="never"：被不透明 Boot 蓋住時不空轉 GPU */
+  active: boolean;
+  /** WebGL context 遺失時上報（PortfolioPage 收到後切 FallbackBackdrop 靜態背景） */
+  onFatal?: () => void;
+}
+
+export default function Scene3D({ active, onFatal }: Scene3DProps) {
   return (
     <Canvas
-      dpr={[1, 1.75]}
+      dpr={[1, 1.5]}
+      frameloop={active ? "always" : "never"}
       camera={{ fov: 55, near: 0.1, far: 220, position: [0.4, 0.5, 9.8] }}
       gl={{ antialias: false, powerPreference: "high-performance", alpha: false }}
+      onCreated={({ gl }) => {
+        // m-14：GPU 過載/驅動重設造成 context lost → preventDefault + 上報降級，
+        // 避免黑畫面 / 整屏閃爍後永遠不恢復（R3F 的 onCreated 只在掛載時執行一次）
+        const onLost = (e: Event) => {
+          e.preventDefault();
+          onFatal?.();
+        };
+        gl.domElement.addEventListener("webglcontextlost", onLost, false);
+      }}
     >
       <SceneContents />
       <EffectComposer multisampling={4}>

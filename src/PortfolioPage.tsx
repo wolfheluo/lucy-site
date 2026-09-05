@@ -77,7 +77,8 @@ export default function PortfolioPage() {
         <div className="scene">
           <SceneBoundary fallback={<FallbackBackdrop />}>
             <Suspense fallback={<FallbackBackdrop />}>
-              <Scene3D />
+              {/* boot 碎裂退場前 frameloop="never"（被不透明 Boot 蓋住）；context lost → onFatal 降級 */}
+              <Scene3D active={bootGone} onFatal={() => setWebglOk(false)} />
             </Suspense>
           </SceneBoundary>
         </div>
