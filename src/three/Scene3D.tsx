@@ -4,7 +4,7 @@
 // =====================================================================
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Stars, Sparkles, useTexture } from "@react-three/drei";
-import { EffectComposer, Bloom, Vignette, ToneMapping } from "@react-three/postprocessing";
+import { EffectComposer, Vignette, ToneMapping } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 
@@ -297,8 +297,10 @@ export default function Scene3D({ active, onFatal }: Scene3DProps) {
       }}
     >
       <SceneContents />
+      {/* Bloom 已移除（2026-09）：postprocessing 的 Bloom 在 NVIDIA/Chromium 上捲動時
+          會偶發輸出整幀黑（連 mipmap/Kawase 兩種 blur 路徑都中獎）；視覺影響小故直接移除。
+          保留 Vignette + ACES ToneMapping 維持整體色調。 */}
       <EffectComposer multisampling={4}>
-        <Bloom intensity={0.85} luminanceThreshold={0.5} luminanceSmoothing={0.25} mipmapBlur radius={0.7} />
         <Vignette eskil={false} offset={0.16} darkness={0.55} />
         <ToneMapping mode={THREE.ACESFilmicToneMapping} />
       </EffectComposer>
