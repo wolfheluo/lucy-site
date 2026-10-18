@@ -100,10 +100,15 @@ function Chart({ series }: { series: { ts: number; viewers: number }[] }) {
   const W = 800;
   const H = 240;
   const PAD = 14;
-  const max = Math.max(1, ...data.map((d) => d.viewers));
-  const scaleMax = max * 1.12; // 留 headroom，避免滿資料時線貼在頂端變成一塊
+  const values = data.map((d) => d.viewers);
+  const max = Math.max(1, ...values);
+  const rawMin = Math.min(...values);
+  // 以資料區間縮放（留 8% 上下餘裕），人數幾乎持平時才看得出起伏
+  const span = max - rawMin;
+  const lo = span > max * 0.02 ? rawMin - span * 0.08 : max * 0.96;
+  const hi = span > max * 0.02 ? max + span * 0.08 : max * 1.04;
   const xAt = (i: number) => (data.length <= 1 ? 0 : (i / (data.length - 1)) * W);
-  const yAt = (v: number) => H - PAD - (v / scaleMax) * (H - PAD * 2);
+  const yAt = (v: number) => H - PAD - ((v - lo) / Math.max(1, hi - lo)) * (H - PAD * 2);
   const pts = data.map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.viewers).toFixed(1)}`).join(" ");
   const area = pts ? `${pts} ${xAt(data.length - 1).toFixed(1)},${H} 0,${H}` : "";
   const last = data[data.length - 1];
