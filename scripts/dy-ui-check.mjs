@@ -4,6 +4,9 @@
 // =====================================================================
 import { chromium } from "@playwright/test";
 
+// 每次執行用不同來源 IP，避免 login rate-limit（5 次/15 分）
+const RANDOM_IP = `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
+
 const base = process.argv[2] ?? "http://127.0.0.1:3911";
 const password = process.argv[3] ?? "local-test-pass";
 

@@ -1,12 +1,12 @@
 // =====================================================================
-//  DOUYIN MONITOR client 頁面（單頁儀表板 + 監控清單抽屜）
-//  - 登入牆：沿用站上 admin session（/api/auth/*），401 一律回到鎖定畫面
-//  - 2 秒輪詢 /state（cursor 增量併入彈幕）；/targets 每 15 秒刷新
-//  - 選中房離線時自動抓 /replay（60 秒快取）顯示歷史回放
+//  DOUYIN MONITOR 儀表板（版面/色彩照 Python 原版 templates/index.html）
+//  結構：topbar（網址切換＋狀態＋清單）→ 6 卡 → 3×2 主區 → footer
+//  · 左上 在線人數曲線 / 左下 在線觀眾 Top10 / 中間 即時彈幕（跨兩列）
+//  · 右上 粉絲團親密度 / 右下 貢獻榜（送禮・本場累計）
+//  資料：2 秒輪詢 /state（cursor 增量）；離線時抓 /replay（60 秒快取）
 // =====================================================================
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import ViewerChart from "./ViewerChart";
 import {
   ApiError,
   UnauthorizedError,
@@ -15,43 +15,50 @@ import {
   type StatePayload,
   type TargetWithState,
 } from "./api";
+import { parseRid } from "./room";
 import "./dy-monitor.css";
 
-type Phase = "checking" | "locked" | "open";
-type ChatFilter = "all" | "chat" | "gift" | "member";
+type ChatFilter = "all" | "Chat" | "Member" | "Gift";
+const CHAT_LIMIT = 400;
+const TYPE_LABEL: Record<string, string> = { Chat: "聊天", Member: "進場", Gift: "禮物", Like: "點讚" };
+const TYPE_FALLBACK: Record<string, string> = {
+  Member: "進入了直播間",
+  Gift: "送出了禮物",
+  Like: "點讚了主播",
+};
+const GIFT_MUTED = ["粉丝团灯牌", "点亮粉丝团"];
 
-const CHAT_LIMIT = 120;
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmt = (n: number | null | undefined) =>
+  n === null || n === undefined || Number.isNaN(n) ? "—" : Number(n).toLocaleString("en-US");
+const hhmmss = (t?: number | null) => {
+  if (!t) return "尚未更新";
+  const d = new Date(t * 1000);
+  return `更新於 ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+const fmtDate = (t?: number | null) => {
+  if (!t) return "—";
+  const d = new Date(t * 1000);
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const isMutedGift = (m: { gift_name?: string | null; content?: string | null }) =>
+  GIFT_MUTED.some((k) => (m.gift_name ?? "").includes(k) || (m.content ?? "").includes(k));
 
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-function hhmmss(sec: number): string {
-  const d = new Date(sec * 1000);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-function num(n: number | null | undefined): string {
-  return (n ?? 0).toLocaleString("en-US");
-}
-function compact(n: number | null | undefined): string {
-  const v = n ?? 0;
-  if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}億`;
-  if (v >= 10_000) return `${(v / 10_000).toFixed(1)}萬`;
-  return String(v);
-}
-function duration(start: number | null | undefined, end: number | null | undefined): string {
-  if (!start) return "—";
-  const sec = Math.max(0, (end ?? Date.now() / 1000) - start);
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return h > 0 ? `${h}h${pad(m)}m` : `${m}m`;
+interface ChatItem {
+  id?: number;
+  type: string;
+  nickname: string;
+  content: string;
+  gift_name?: string | null;
+  diamonds?: number | null;
+  ts: number;
 }
 
-// ─────────────────────────── 鎖定畫面 ───────────────────────────
+// ── 鎖定畫面 ────────────────────────────────────────────────
 function LockPanel({ onUnlocked }: { onUnlocked: () => void }) {
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -65,9 +72,8 @@ function LockPanel({ onUnlocked }: { onUnlocked: () => void }) {
       setBusy(false);
     }
   };
-
   return (
-    <div className="dym-lock">
+    <div className="dym dym-lock">
       <form className="dym-lock-panel" onSubmit={submit}>
         <div className="dym-lock-title">DOUYIN MONITOR</div>
         <div className="dym-lock-sub">// 需要管理權限</div>
@@ -88,8 +94,45 @@ function LockPanel({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
-// ─────────────────────────── 監控清單抽屜 ───────────────────────────
-function TargetDrawer({
+// ── 人數曲線（原版 viewBox 800×240）─────────────────────────
+function Chart({ series }: { series: { ts: number; viewers: number }[] }) {
+  const data = series.slice(-240);
+  const W = 800;
+  const H = 240;
+  const max = Math.max(1, ...data.map((d) => d.viewers));
+  const pts = data
+    .map((d, i) => {
+      const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * W;
+      const y = H - (d.viewers / max) * (H - 16) - 8;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const area = pts ? `${pts} ${W},${H} 0,${H}` : "";
+  return (
+    <div className="dym-chartwrap">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="dym-svg">
+        <defs>
+          <linearGradient id="dymFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(0,229,255,0.28)" />
+            <stop offset="100%" stopColor="rgba(0,229,255,0)" />
+          </linearGradient>
+        </defs>
+        {data.length > 2 && <polygon points={area} fill="url(#dymFill)" />}
+        {pts && (
+          <polyline points={pts} fill="none" stroke="var(--cyan)" strokeWidth="2" strokeLinejoin="round" />
+        )}
+      </svg>
+      <div className="dym-chartaxis">
+        <span>{data.length ? fmtDate(data[0]!.ts).slice(-11) : "--:--"}</span>
+        <span>峰值 {fmt(max)}</span>
+        <span>{data.length ? fmtDate(data[data.length - 1]!.ts).slice(-11) : "--:--"}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── 監控清單抽屜（原版 drawer）──────────────────────────────
+function Drawer({
   open,
   targets,
   maxTargets,
@@ -107,7 +150,9 @@ function TargetDrawer({
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [notifs, setNotifs] = useState<{ id: number; kind: string | null; ok: number; error: string | null; text: string | null; ts: number }[]>([]);
+  const [notifs, setNotifs] = useState<
+    { id: number; kind: string | null; ok: number; error: string | null; text: string | null; ts: number }[]
+  >([]);
 
   const refreshNotifs = useCallback(() => {
     dyApi
@@ -167,7 +212,7 @@ function TargetDrawer({
   const test = async () => {
     try {
       const r = await dyApi.testPush();
-      onError(r.ok ? "測試推播已送出 ✓" : `測試推播失敗：${r.error ?? "未知"}`);
+      onError(r.ok ? "測試推送已送出 ✓" : `測試推送失敗：${r.error ?? "未知"}`);
       refreshNotifs();
     } catch (ex) {
       onError(ex instanceof ApiError ? ex.message : "測試失敗");
@@ -183,123 +228,147 @@ function TargetDrawer({
   ];
 
   return (
-    <aside className={`dym-drawer${open ? " is-open" : ""}`} aria-hidden={!open}>
-      <header className="dym-drawer-head">
-        <span>監控清單 {targets.length}/{maxTargets}</span>
-        <button className="dym-btn dym-btn-ghost" onClick={onClose} type="button">
-          CLOSE
-        </button>
-      </header>
-
-      <form className="dym-add" onSubmit={add}>
-        <input
-          className="dym-input"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://live.douyin.com/812195156626"
-        />
-        <button className="dym-btn dym-btn-primary" type="submit" disabled={busy}>
-          {busy ? "…" : "ADD"}
-        </button>
-      </form>
-
-      <div className="dym-targets">
-        {targets.length === 0 && <div className="dym-empty">清單為空，先貼一個直播間網址</div>}
-        {targets.map((t) => {
-          const live = t.last_status === 2;
-          return (
-            <div key={t.web_rid} className={`dym-target${t.selected ? " is-sel" : ""}`}>
-              <div className="dym-target-main" onClick={() => select(t.web_rid)}>
-                <span className={`dym-dot${live ? " is-live" : ""}`} />
-                <span className="dym-target-name">{t.anchor_name || t.label || t.web_rid}</span>
-                <span className="dym-dim">{t.web_rid}</span>
-                <span className="dym-badge">{t.status_text}</span>
-                {t.selected && <span className="dym-badge dym-badge-ice">主畫面</span>}
-              </div>
-              <div className="dym-target-actions">
-                <button
-                  type="button"
-                  className={`dym-chip${t.notify_live ? " on" : ""}`}
-                  onClick={() => patch(t.web_rid, { notify_live: t.notify_live ? 0 : 1 })}
-                >
-                  開播
-                </button>
-                <button
-                  type="button"
-                  className={`dym-chip${t.notify_end ? " on" : ""}`}
-                  onClick={() => patch(t.web_rid, { notify_end: t.notify_end ? 0 : 1 })}
-                >
-                  下播
-                </button>
-                <button
-                  type="button"
-                  className={`dym-chip${t.capture ? " on" : ""}`}
-                  onClick={() => setExpanded(expanded === t.web_rid ? null : t.web_rid)}
-                >
-                  {t.capture ? `${t.caps_on}/5` : "不收錄"}
-                </button>
-                <button type="button" className="dym-chip dym-chip-danger" onClick={() => remove(t.web_rid)}>
-                  移除
-                </button>
-              </div>
-              {expanded === t.web_rid && (
-                <div className="dym-caps">
-                  {CAPS.map((c) => {
-                    const on = Number((t as unknown as Record<string, number>)[c.key] ?? 0);
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        className={`dym-chip${on ? " on" : ""}`}
-                        onClick={() => patch(t.web_rid, { [c.key]: on ? 0 : 1 })}
-                      >
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="dym-drawer-foot">
-        <button className="dym-btn" type="button" onClick={test}>
-          測試推播
-        </button>
-        <div className="dym-notifs">
-          {notifs.length === 0 && <div className="dym-empty">尚無通知紀錄</div>}
-          {notifs.map((n) => (
-            <div key={n.id} className="dym-notif">
-              <span className={n.ok ? "dym-up" : "dym-down"}>{n.ok ? "OK" : "FAIL"}</span>
-              <span className="dym-dim">{hhmmss(n.ts)}</span>
-              <span>{n.kind ?? "-"}</span>
-              <span className="dym-dim dym-ellipsis">{n.ok ? (n.text ?? "").split("\n")[0] : n.error}</span>
-            </div>
-          ))}
+    <>
+      <div className={`dym-mask${open ? " is-open" : ""}`} onClick={onClose} aria-hidden="true" />
+      <aside className={`dym-drawer${open ? " is-open" : ""}`} aria-hidden={!open}>
+        <div className="dym-drawer-head">
+          <h2>監控清單 {targets.length}/{maxTargets}</h2>
+          <button className="dym-x" type="button" onClick={onClose}>
+            ✕
+          </button>
         </div>
-      </div>
-    </aside>
+
+        <form className="dym-roomform" onSubmit={add}>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="貼上直播間網址，例如 https://live.douyin.com/123456789"
+            spellCheck={false}
+          />
+          <button type="submit" disabled={busy}>
+            {busy ? "…" : "加入"}
+          </button>
+        </form>
+        <p className="dym-drawer-hint">
+          點列＝切換主畫面到該房（選中房強制收錄）；右側開關控制通知與收錄。
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {targets.length === 0 && <div className="dym-empty">清單為空，先貼一個直播間網址</div>}
+          {targets.map((t) => {
+            const live = t.last_status === 2;
+            return (
+              <div key={t.web_rid} className={`dym-trow${t.selected ? " sel" : ""}`}>
+                <div className="dym-tinfo" onClick={() => select(t.web_rid)}>
+                  <span className="dym-tname">{t.anchor_name || t.label || t.web_rid}</span>
+                  <span className="dym-trid">{t.web_rid}</span>
+                  <span className={`dym-badge ${live ? "live" : "off"}`}>{t.status_text}</span>
+                  {t.selected && <span className="dym-seltag">主畫面</span>}
+                </div>
+                <div className="dym-switches">
+                  <button
+                    type="button"
+                    className={`dym-tg${t.notify_live ? " on" : ""}`}
+                    onClick={() => patch(t.web_rid, { notify_live: t.notify_live ? 0 : 1 })}
+                    aria-label="開播通知"
+                  >
+                    <i />
+                  </button>
+                  <span className="dym-tg-label">開播</span>
+                  <button
+                    type="button"
+                    className={`dym-tg${t.notify_end ? " on" : ""}`}
+                    onClick={() => patch(t.web_rid, { notify_end: t.notify_end ? 0 : 1 })}
+                    aria-label="下播通知"
+                  >
+                    <i />
+                  </button>
+                  <span className="dym-tg-label">下播</span>
+                  <button
+                    type="button"
+                    className={`dym-chip${t.capture ? " on" : ""}`}
+                    onClick={() => setExpanded(expanded === t.web_rid ? null : t.web_rid)}
+                    title="收錄細項"
+                  >
+                    {t.capture ? `收錄 ${t.caps_on}/5` : "不收錄"}
+                  </button>
+                  <button
+                    type="button"
+                    className="dym-chip danger"
+                    onClick={() => remove(t.web_rid)}
+                    title="移除"
+                  >
+                    移除
+                  </button>
+                </div>
+                {expanded === t.web_rid && (
+                  <div className="dym-caps">
+                    {CAPS.map((c) => {
+                      const on = Number((t as unknown as Record<string, number>)[c.key] ?? 0);
+                      return (
+                        <button
+                          key={c.key}
+                          type="button"
+                          className={`dym-chip${on ? " on" : ""}`}
+                          onClick={() => patch(t.web_rid, { [c.key]: on ? 0 : 1 })}
+                        >
+                          {c.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="dym-drawer-foot">
+          <button className="dym-btn" type="button" onClick={test}>
+            測試推送
+          </button>
+          <h3 style={{ margin: "12px 0 6px", fontSize: 12, letterSpacing: 1, color: "#8ba2b4" }}>
+            最近通知
+          </h3>
+          <div className="dym-notifs">
+            {notifs.length === 0 && <div className="dym-empty">尚無紀錄</div>}
+            {notifs.map((n) => (
+              <div key={n.id} className="dym-nrow">
+                <span className={n.ok ? "good" : "bad"}>{n.ok ? "OK" : "FAIL"}</span>
+                <span>{hhmmss(n.ts).replace("更新於 ", "")}</span>
+                <span>{n.kind ?? "-"}</span>
+                <span className="dym-ellipsis">
+                  {n.ok ? (n.text ?? "").split("\n")[0] : n.error}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
-// ─────────────────────────── 主頁面 ───────────────────────────
+// ── 主頁面 ──────────────────────────────────────────────────
 export default function DyMonitorPage() {
-  const [phase, setPhase] = useState<Phase>("checking");
+  const [phase, setPhase] = useState<"checking" | "locked" | "open">("checking");
   const [state, setState] = useState<StatePayload | null>(null);
   const [targets, setTargets] = useState<TargetWithState[]>([]);
   const [maxTargets, setMaxTargets] = useState(5);
   const [selectedRid, setSelectedRid] = useState("");
-  const [chat, setChat] = useState<StatePayload["chat"]>([]);
+  const [chat, setChat] = useState<ChatItem[]>([]);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [drawer, setDrawer] = useState(false);
   const [toast, setToast] = useState("");
+  const [roomUrl, setRoomUrl] = useState("");
+  const [switching, setSwitching] = useState(false);
   const [replay, setReplay] = useState<ReplayPayload | null>(null);
   const [replayAt, setReplayAt] = useState(0);
 
   const cursor = useRef(0);
-  const selectedRef = useRef("");
+  const likesRef = useRef<{ last: number | null; delta: number }>({ last: null, delta: 0 });
+  const chatBox = useRef<HTMLDivElement | null>(null);
+  const stickBottom = useRef(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const notify = useCallback((msg: string) => {
@@ -313,10 +382,13 @@ export default function DyMonitorPage() {
       const res = await dyApi.targets();
       setTargets(res.targets);
       setSelectedRid(res.selected);
-      selectedRef.current = res.selected;
+      const sel = res.targets.find((t) => t.web_rid === res.selected);
+      if (sel && !roomUrl) setRoomUrl(`https://live.douyin.com/${res.selected}`);
     } catch (ex) {
       if (ex instanceof UnauthorizedError) setPhase("locked");
     }
+    // roomUrl 只做初始值，避免覆寫使用者輸入
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadHealth = useCallback(async () => {
@@ -324,11 +396,10 @@ export default function DyMonitorPage() {
       const h = await dyApi.health();
       setMaxTargets(Number(h.max_targets ?? 5));
     } catch {
-      // health 失敗不影響主流程
+      /* ignore */
     }
   }, []);
 
-  // 認證檢查
   useEffect(() => {
     dyApi
       .me()
@@ -339,6 +410,7 @@ export default function DyMonitorPage() {
   // 選中房切換 → 重置游標與彈幕
   useEffect(() => {
     cursor.current = 0;
+    likesRef.current = { last: null, delta: 0 };
     setChat([]);
     setReplay(null);
     setReplayAt(0);
@@ -355,7 +427,10 @@ export default function DyMonitorPage() {
         cursor.current = s.chat_cursor;
         setState(s);
         if (s.chat.length > 0) {
-          setChat((prev) => [...prev, ...s.chat].slice(-CHAT_LIMIT));
+          setChat((prev) => {
+            const next = [...prev, ...(s.chat as unknown as ChatItem[])];
+            return next.slice(-CHAT_LIMIT);
+          });
         }
         if (s.room?.status !== 2 && s.selected_web_rid) {
           const now = Date.now();
@@ -365,6 +440,19 @@ export default function DyMonitorPage() {
               if (alive) {
                 setReplay(r);
                 setReplayAt(now);
+                if (r.ok) {
+                  setChat(
+                    (r.chat ?? []).map((c, i) => ({
+                      id: i,
+                      type: c.type,
+                      nickname: c.nickname ?? "",
+                      content: c.content ?? "",
+                      gift_name: c.gift_name,
+                      diamonds: c.diamonds,
+                      ts: c.ts,
+                    }))
+                  );
+                }
               }
             } catch {
               if (alive) setReplay(null);
@@ -386,7 +474,6 @@ export default function DyMonitorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, replay, replayAt]);
 
-  // 清單與上限（15 秒）
   useEffect(() => {
     if (phase !== "open") return;
     void loadTargets();
@@ -395,213 +482,378 @@ export default function DyMonitorPage() {
     return () => clearInterval(t);
   }, [phase, loadTargets, loadHealth]);
 
+  // 彈幕自動貼底
+  useEffect(() => {
+    const box = chatBox.current;
+    if (box && stickBottom.current) box.scrollTop = box.scrollHeight;
+  }, [chat, filter]);
+
+  const switchRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const rid = parseRid(roomUrl);
+    if (!rid) {
+      notify("網址裡找不到直播間號");
+      return;
+    }
+    setSwitching(true);
+    try {
+      await dyApi.selectTarget(rid);
+      await loadTargets();
+      notify(`已切換到 ${rid}`);
+    } catch (ex) {
+      notify(ex instanceof ApiError ? ex.message : "切換失敗");
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   if (phase === "checking") return <div className="dym-loading">ESTABLISHING LINK…</div>;
   if (phase === "locked") return <LockPanel onUnlocked={() => setPhase("open")} />;
 
-  const isReplay = Boolean(replay) && state?.room?.status !== 2;
-  const room = (isReplay ? replay!.session : state?.room ?? {}) as Record<string, unknown>;
-  const series = isReplay ? replay!.series : state?.series ?? [];
-  const rank = (isReplay ? replay!.rank : state?.rank ?? []) as StatePayload["rank"];
-  const fans = (isReplay ? replay!.fans ?? {} : state?.fans ?? {}) as StatePayload["fans"];
-  const fansMeta = (isReplay ? replay!.fans ?? {} : state?.fans_meta ?? {}) as StatePayload["fans_meta"];
-  const gifts = isReplay ? replay!.gifts : state?.gifts ?? { total_diamonds: 0, events: 0, catalog: 0, top: [] };
-  const chatRows = isReplay
-    ? replay!.chat.map((c) => ({ ...c, id: 0, nickname: c.nickname ?? "", gift_name: c.gift_name ?? "" }))
-    : chat;
-
-  const filteredChat = chatRows.filter((c) =>
-    filter === "all"
-      ? true
-      : filter === "chat"
-        ? c.type === "Chat"
-        : filter === "gift"
-          ? c.type === "Gift"
-          : c.type === "Member" || c.type === "Like"
-  );
-
-  const status = Number(room.status ?? state?.room?.status ?? 0);
-  const live = status === 2;
-  const viewerCount = Number(room.viewers ?? 0);
-  const likeCount = Number(room.like_count ?? 0);
+  // ── 顯示資料：即時 or 回放 ──
+  const live = state?.room?.status === 2;
+  const isReplay = !live && Boolean(replay?.ok);
+  const rp = replay;
+  const room = state?.room ?? {};
+  const series = isReplay ? (rp?.series ?? []) : (state?.series ?? []);
+  const rank = isReplay ? (rp?.rank ?? []) : (state?.rank ?? []);
+  const fans = isReplay ? rp?.fans ?? null : state?.fans ?? null;
+  const fansMeta = isReplay ? rp?.fans ?? {} : state?.fans_meta ?? {};
+  const giftTop = isReplay
+    ? (rp?.gifts.top ?? [])
+    : (state?.gifts.top ?? []).map((g) => ({ nickname: g.nickname, diamonds: g.diamonds, count: g.count }));
+  const giftTotal = isReplay ? (rp?.gifts.total_diamonds ?? 0) : (state?.gifts.total_diamonds ?? 0);
+  const giftEvents = isReplay ? (rp?.gifts.events ?? 0) : (state?.gifts.events ?? 0);
+  const catalogSize = state?.gifts.catalog ?? 0;
   const inter = state?.inter;
 
+  const statusText = isReplay
+    ? "已下播（回放）"
+    : state?.loading
+      ? "載入中…"
+      : String(room.status_text ?? "未知");
+  const statusLive = !isReplay && Number(room.status) === 2;
+
+  // 點讚增量（本次監控累計，對照原版 likedelta）
+  const likeCount = Number(room.like_count ?? 0);
+  if (!isReplay) {
+    if (likesRef.current.last !== null) {
+      const d = likeCount - likesRef.current.last;
+      if (d > 0) likesRef.current.delta += d;
+    }
+    likesRef.current.last = likeCount;
+  }
+
+  const chatView = chat.filter((m) => {
+    if (filter === "all") return true;
+    if (filter === "Gift") return m.type === "Gift" && !isMutedGift(m);
+    return m.type === filter;
+  });
+  const mutedCount = chat.filter(isMutedGift).length;
+  const chatCountText =
+    filter === "all"
+      ? `${chat.length} 則`
+      : `${chatView.length} 則 / 共 ${chat.length}` +
+        (filter === "Gift" && mutedCount ? `（已濾粉絲團 ${mutedCount}）` : "");
+
+  const up = state?.uptime ?? 0;
+  const upStr = `${Math.floor(up / 3600)}:${pad(Math.floor((up % 3600) / 60))}:${pad(up % 60)}`;
+  const apiOk = Boolean(state?.api.chat_ok && state?.api.rank_ok);
+  const firstError = state?.errors?.[0]?.msg;
+
   return (
-    <div className="dym">
+    <div className="dym dym-dash">
       {toast && <div className="dym-toast">{toast}</div>}
 
-      <header className="dym-head">
-        <div className="dym-head-left">
-          <span className={`dym-live${live ? " is-live" : ""}`}>{live ? "● LIVE" : "○ OFFLINE"}</span>
-          <span className="dym-anchor">{(room.anchor_name as string) || "未選擇房間"}</span>
-          <span className="dym-title">{String(room.title ?? "")}</span>
-        </div>
-        <div className="dym-head-right">
-          {isReplay && (
-            <span className="dym-badge dym-badge-replay">
-              ◷ 歷史回放 {room.started_at ? hhmmss(Number(room.started_at)) : ""}–
-              {room.ended_at ? hhmmss(Number(room.ended_at)) : ""}
-            </span>
-          )}
-          {!state?.api.abogus && <span className="dym-badge dym-badge-warn">榜單待啟用</span>}
-          <Link className="dym-btn" to="/tools/dy-monitor/history">
-            ◷ 歷史場次
-          </Link>
-          <button className="dym-btn" type="button" onClick={() => setDrawer(true)}>
-            ☰ 監控清單 {targets.length}
+      {/* ── 頂欄 ── */}
+      <header className="dym-topbar">
+        <form className="dym-roomform" onSubmit={switchRoom} autoComplete="off">
+          <input
+            value={roomUrl}
+            onChange={(e) => setRoomUrl(e.target.value)}
+            placeholder="貼上直播間網址，例如 https://live.douyin.com/123456789"
+            spellCheck={false}
+          />
+          <button type="submit" disabled={switching}>
+            切換監控
           </button>
+        </form>
+
+        {isReplay && (
+          <span className="dym-replaytag">
+            ◷ 歷史回放 {fmtDate(rp?.session.started_at)}–{fmtDate(rp?.session.ended_at)}
+            {rp?.session.partial ? "（中途開始）" : ""}
+          </span>
+        )}
+
+        <div className={`dym-status${statusLive ? " is-live" : " is-off"}`}>
+          <i className="dot" />
+          <span>{statusLive ? "直播中" : statusText}</span>
         </div>
+
+        <Link className="dym-btn" to="/tools/dy-monitor/history">
+          場次複盤
+        </Link>
+        <button className="dym-btn" type="button" onClick={() => setDrawer(true)}>
+          ☰ 監控清單 <b>{targets.length}</b>
+        </button>
       </header>
 
-      <section className="dym-kpis">
-        {[
-          { label: "在線人數", value: compact(viewerCount), sub: String(room.viewer_text ?? "") },
-          { label: "本場點讚", value: compact(likeCount), sub: `+${num(inter?.likes_per_min ?? 0)}/分` },
-          { label: "累計觀眾", value: String(room.total_user ?? "—"), sub: "整場" },
-          { label: "禮物", value: num(gifts.total_diamonds), sub: `${num(gifts.events)} 次 · 鑽` },
-          { label: "彈幕", value: num(inter?.chat ?? 0), sub: `${num(inter?.chat_users ?? 0)} 人 · ${inter?.chat_per_min ?? 0}/分` },
-          { label: "進場", value: num(inter?.member ?? 0), sub: `${inter?.member_per_min ?? 0}/分` },
-        ].map((k) => (
-          <div key={k.label} className="dym-kpi">
-            <div className="dym-kpi-label">{k.label}</div>
-            <div className="dym-kpi-value">{k.value}</div>
-            <div className="dym-kpi-sub">{k.sub}</div>
-          </div>
-        ))}
+      {/* ── 6 張資訊卡（原版欄位）── */}
+      <section className="dym-cards">
+        <article className="dym-card">
+          <h3>開播狀態</h3>
+          <p className="val" style={{ color: statusLive ? "var(--lime)" : "var(--magenta)" }}>
+            {statusText}
+          </p>
+          <small className="sub">{String(room.title ?? "（無標題）")}</small>
+        </article>
+        <article className="dym-card">
+          <h3>在線人數</h3>
+          <p className="val">{isReplay ? fmt(Number(rp?.session.peak_viewers ?? 0)) : fmt(Number(room.viewers ?? 0))}</p>
+          <small className="sub">
+            {isReplay
+              ? `上場峰值 · 平均 ${fmt(Math.round(Number(rp?.session.avg_viewers ?? 0)))}`
+              : String(room.viewers_desc || (room.viewer_text ? `顯示：${room.viewer_text}` : "—")) +
+                (state?.stale ? "（資料延遲中）" : "")}
+          </small>
+        </article>
+        <article className="dym-card">
+          <h3>本場點讚</h3>
+          <p className="val">{fmt(Number(room.like_count ?? 0))}</p>
+          <small className="sub">
+            {isReplay
+              ? `本場 +${fmt(Number(rp?.session.likes_end ?? 0) - Number(rp?.session.likes_start ?? 0))}`
+              : `本次監控 +${fmt(likesRef.current.delta)}`}
+          </small>
+        </article>
+        <article className="dym-card">
+          <h3>總觀看人次</h3>
+          <p className="val">{String(room.total_user || "—")}</p>
+          <small className="sub">本場累計進房人次</small>
+        </article>
+        <article className="dym-card">
+          <h3>本場禮物總值</h3>
+          <p className="val">{fmt(giftTotal)}</p>
+          <small className="sub">
+            {fmt(giftEvents)} 次{catalogSize ? ` · 目錄 ${fmt(catalogSize)}` : ""}
+          </small>
+        </article>
+        <article className="dym-card">
+          <h3>主播</h3>
+          <p className="val sm">{String(room.anchor_name || "—")}</p>
+          <small className="sub">直播間 {String(room.web_rid || selectedRid || "—")}</small>
+        </article>
       </section>
 
-      <section className="dym-grid">
-        <div className="dym-panel dym-panel-chart">
-          <ViewerChart series={series} replay={isReplay} />
-        </div>
+      {/* ── 主區 3×2 ── */}
+      <main className="dym-main">
+        <section className="dym-panel dym-p-chart">
+          <div className="dym-phead">
+            <h2>在線人數曲線</h2>
+            <span className="dym-hint">{isReplay ? "上場全程" : "近 5 分鐘"}</span>
+          </div>
+          <Chart series={series} />
+        </section>
 
-        <div className="dym-panel dym-panel-chat">
-          <div className="dym-panel-head">
-            <span>彈幕</span>
-            <div className="dym-filters">
-              {(["all", "chat", "gift", "member"] as ChatFilter[]).map((f) => (
+        <section className="dym-panel dym-p-rank">
+          <div className="dym-phead">
+            <h2>在線觀眾 Top 10</h2>
+            <span className="dym-hint">
+              {state?.api.abogus ? `30 秒更新 · ${hhmmss(state?.ts.rank)}` : "榜單未啟用"}
+            </span>
+          </div>
+          <div className="dym-tablewrap">
+            <table className="dym-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>觀眾</th>
+                  <th className="num">付費等級</th>
+                  <th className="num">粉絲團</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rank.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      {state?.api.abogus ? "尚無觀眾資料" : "P2 簽名未啟用，榜單暫停"}
+                    </td>
+                  </tr>
+                ) : (
+                  rank.map((r, i) => (
+                    <tr key={`${r.nickname}-${i}`}>
+                      <td>{r.rank ?? i + 1}</td>
+                      <td>
+                        {r.nickname || "匿名"}
+                        {r.guard ? " 🛡" : ""}
+                      </td>
+                      <td className="num">{r.pay_level ? `Lv${r.pay_level}` : "—"}</td>
+                      <td className="num">{r.fans_level ? `Lv${r.fans_level}` : "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="dym-panel dym-p-chat">
+          <div className="dym-phead">
+            <h2>即時彈幕</h2>
+            <div className="dym-tabs">
+              {(["all", "Member", "Gift", "Chat"] as ChatFilter[]).map((f) => (
                 <button
                   key={f}
                   type="button"
-                  className={`dym-chip${filter === f ? " on" : ""}`}
-                  onClick={() => setFilter(f)}
+                  className={`dym-tab${filter === f ? " active" : ""}`}
+                  data-filter={f}
+                  onClick={() => {
+                    setFilter(f);
+                    stickBottom.current = true;
+                  }}
                 >
-                  {f === "all" ? "全部" : f === "chat" ? "聊天" : f === "gift" ? "禮物" : "進場"}
+                  {f === "all" ? "全部" : TYPE_LABEL[f]}
                 </button>
               ))}
             </div>
+            <span className="dym-hint">{chatCountText}</span>
+            <span className="dym-hint">
+              {inter
+                ? `${fmt(inter.chat)} 則｜發言 ${fmt(inter.chat_users)} 人｜${inter.chat_per_min}/分｜進場 ${inter.member_per_min}/分｜讚 ${inter.likes_per_min}/分`
+                : "—"}
+            </span>
           </div>
-          <div className="dym-panel-body dym-chat">
-            {filteredChat.length === 0 && <div className="dym-empty">沒有訊息</div>}
-            {filteredChat.map((c, i) => (
-              <div key={`${c.id}-${i}`} className={`dym-chat-row dym-t-${c.type}`}>
-                <span className="dym-dim">{hhmmss(c.ts)}</span>
-                <span className="dym-nick">{c.nickname || "—"}</span>
-                <span className="dym-content">{c.content}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="dym-panel">
-          <div className="dym-panel-head">
-            <span>粉絲團親密度</span>
-            <span className="dym-dim">{isReplay ? "上場最後快照" : `${fansMeta.club_name ?? fans.club_name ?? ""}`}</span>
-          </div>
-          <div className="dym-panel-body">
-            <div className="dym-fans-meta">
-              <span>活躍 {num(fans.active)}</span>
-              <span>總數 {num(fans.total)}</span>
-              {fansMeta.today_new !== undefined && <span>今日 +{num(fansMeta.today_new)}</span>}
-            </div>
-            {(fans.members ?? []).slice(0, 10).map((m, i) => (
-              <div key={`${m.nickname}-${i}`} className="dym-rank-row">
-                <span className="dym-rank-idx">{i + 1}</span>
-                <span className="dym-nick">{m.nickname}</span>
-                <span className="dym-dim">Lv.{m.level}</span>
-                <span className="dym-rank-score">{compact(m.intimacy)}</span>
-              </div>
-            ))}
-            {(fans.members ?? []).length === 0 && <div className="dym-empty">沒有親密度資料</div>}
-          </div>
-        </div>
-
-        <div className="dym-panel">
-          <div className="dym-panel-head">
-            <span>在線觀眾榜</span>
-            <span className="dym-dim">{state?.api.rank_ok ? "即時" : "待啟用"}</span>
-          </div>
-          <div className="dym-panel-body">
-            {rank.length === 0 && (
+          <div
+            className="dym-chat"
+            ref={chatBox}
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            }}
+          >
+            {chatView.length === 0 ? (
               <div className="dym-empty">
-                {state?.api.abogus ? "榜單暫無資料" : "P2 才會啟用 a_bogus 簽名（觀眾榜）"}
+                {chat.length ? "此分類目前沒有訊息" : "等待彈幕…（約 4 秒後開始）"}
               </div>
-            )}
-            {rank.slice(0, 10).map((m, i) => (
-              <div key={`${m.nickname}-${i}`} className="dym-rank-row">
-                <span className="dym-rank-idx">{m.rank ?? i + 1}</span>
-                <span className="dym-nick">{m.nickname}</span>
-                <span className="dym-dim">付費 Lv.{m.pay_level}</span>
-                <span className="dym-dim">粉 Lv.{m.fans_level}</span>
-                {m.guard && <span className="dym-badge dym-badge-ice">守護</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="dym-panel">
-          <div className="dym-panel-head">
-            <span>送禮貢獻榜</span>
-            <span className="dym-dim">{num(gifts.total_diamonds)} 鑽</span>
-          </div>
-          <div className="dym-panel-body">
-            {gifts.top.length === 0 && <div className="dym-empty">本場尚無禮物</div>}
-            {gifts.top.map((g, i) => (
-              <div key={`${g.nickname}-${i}`} className="dym-rank-row">
-                <span className="dym-rank-idx">{i + 1}</span>
-                <span className="dym-nick">{g.nickname}</span>
-                <span className="dym-dim">{num(g.count)} 次</span>
-                <span className="dym-rank-score">{num(g.diamonds)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="dym-panel dym-panel-status">
-          <div className="dym-panel-head">
-            <span>SYSTEM</span>
-            <span className="dym-dim">uptime {Math.floor((state?.uptime ?? 0) / 60)}m</span>
-          </div>
-          <div className="dym-panel-body dym-status">
-            <div>
-              輪詢 <b>{state?.intervals.stats ?? "—"}s</b> · 彈幕 <b>{state?.intervals.chat ?? "—"}s</b> · 榜單{" "}
-              <b>{state?.intervals.rank ?? "—"}s</b>
-            </div>
-            <div>
-              DB <b>{state?.db.size_mb ?? "—"} MB</b>
-              {state?.db.warning && <span className="dym-badge dym-badge-warn">容量警告</span>} · 場次{" "}
-              <b>#{state?.db.session_id ?? "—"}</b>
-            </div>
-            <div>
-              彈幕 API <b className={state?.api.chat_ok ? "dym-up" : "dym-down"}>{state?.api.chat_ok ? "OK" : "FAIL"}</b>{" "}
-              · 榜單 API{" "}
-              <b className={state?.api.rank_ok ? "dym-up" : "dym-down"}>{state?.api.rank_ok ? "OK" : "—"}</b>
-            </div>
-            {(state?.errors ?? []).slice(0, 3).map((e, i) => (
-              <div key={i} className="dym-down dym-ellipsis">
-                {hhmmss(e.ts)} {e.msg}
-              </div>
-            ))}
-            {isReplay && (
-              <div className="dym-dim">
-                回放場次 #{replay!.session.id} · {duration(replay!.session.started_at, replay!.session.ended_at)} ·{" "}
-                {num(replay!.session.chat_count)} 則彈幕
-              </div>
+            ) : (
+              chatView.slice(-200).map((m, i) => (
+                <div key={m.id ?? i} className={`dym-crow${isMutedGift(m) ? " is-gift" : ""}`}>
+                  <span className={`dym-tag ${m.type}`}>{TYPE_LABEL[m.type] ?? m.type}</span>
+                  <span className="dym-who">{m.nickname || "匿名"}</span>
+                  <span className="dym-say">{m.content || TYPE_FALLBACK[m.type] || ""}</span>
+                </div>
+              ))
             )}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <TargetDrawer
+        <section className="dym-panel dym-p-fans">
+          <div className="dym-phead">
+            <h2>粉絲團親密度榜</h2>
+            <span className="dym-hint">
+              {isReplay ? "上場最後快照" : `60 秒更新 · ${hhmmss(state?.ts.fans)}`}
+            </span>
+          </div>
+          <div className="dym-fans-meta">
+            活躍 <b>{fmt(fans?.active)}</b> ｜ 總數 <b>{fmt(fans?.total)}</b>
+            {fansMeta.today_new !== undefined ? ` ｜ 今日 +${fmt(fansMeta.today_new)}` : ""}
+            {fans?.club_name ? ` ｜ ${fans.club_name}` : ""}
+          </div>
+          <div className="dym-tablewrap">
+            <table className="dym-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>團員</th>
+                  <th className="num">親密度</th>
+                  <th className="num">等級</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(fans?.members ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      尚無資料
+                    </td>
+                  </tr>
+                ) : (
+                  (fans?.members ?? []).slice(0, 10).map((m, i) => (
+                    <tr key={`${m.nickname}-${i}`}>
+                      <td>{i + 1}</td>
+                      <td>{m.nickname}</td>
+                      <td className="num">{fmt(m.intimacy)}</td>
+                      <td className="num">Lv{m.level}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="dym-panel dym-p-gifters">
+          <div className="dym-phead">
+            <h2>貢獻榜（送禮・本場累計）</h2>
+            <span className="dym-hint">
+              {isReplay
+                ? `上場 ${fmt(giftEvents)} 次 · ${fmt(giftTotal)} 鑽`
+                : `自建統計 · ${fmt(giftEvents)} 次`}
+            </span>
+          </div>
+          <div className="dym-tablewrap">
+            <table className="dym-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>觀眾</th>
+                  <th className="num">鑽石</th>
+                  <th className="num">次數</th>
+                </tr>
+              </thead>
+              <tbody>
+                {giftTop.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="empty">
+                      尚無送禮紀錄
+                    </td>
+                  </tr>
+                ) : (
+                  giftTop.slice(0, 10).map((g, i) => (
+                    <tr key={`${g.nickname}-${i}`}>
+                      <td>{i + 1}</td>
+                      <td>{g.nickname || "匿名"}</td>
+                      <td className="num">{fmt(g.diamonds)}</td>
+                      <td className="num">{fmt(g.count)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      {/* ── 頁尾（原版 foot）── */}
+      <footer className="dym-foot">
+        <span>
+          輪詢 {state?.intervals.stats ?? "—"}s ｜ 彈幕 {state?.intervals.chat ?? "—"}s ｜ 貢獻榜{" "}
+          {state?.intervals.rank ?? "—"}s ｜ 親密度 {state?.intervals.fans ?? "—"}s ｜ 純 API
+        </span>
+        <span>
+          {firstError ? (
+            <span className="err">⚠ {firstError}｜運行 {upStr}</span>
+          ) : (
+            <>
+              API {apiOk ? "OK" : "連線中…"} ｜ 運行 {upStr} ｜ DB {state?.db.size_mb ?? "—"}MB
+              {state?.db.session_id ? ` ｜ 場次 #${state.db.session_id}` : ""}
+            </>
+          )}
+        </span>
+        <Link to="/tools/dy-monitor/history">場次複盤 →</Link>
+      </footer>
+
+      <Drawer
         open={drawer}
         targets={targets}
         maxTargets={maxTargets}

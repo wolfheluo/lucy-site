@@ -6,6 +6,9 @@ import { Navigate, useParams } from "react-router";
 import { CLIENT_TOOLS } from "../tools";
 import ToolFrame from "./ToolFrame";
 
+/** 需要「整頁鎖高、免滾動」的工具（≥981px；窄版自動退回自然滾動） */
+const LOCKED_TOOLS = new Set(["binance-api", "dy-monitor"]);
+
 export default function ToolShell() {
   const { toolId } = useParams();
   const tool = CLIENT_TOOLS.find((t) => t.meta.id === toolId);
@@ -22,7 +25,7 @@ export default function ToolShell() {
     <ToolFrame
       title={tool.meta.title}
       zh={tool.meta.zhTitle}
-      lock={tool.meta.id === "binance-api"}
+      lock={LOCKED_TOOLS.has(tool.meta.id)}
       loading="LOADING MODULE…"
     >
       <Comp />

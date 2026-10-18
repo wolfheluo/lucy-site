@@ -4,6 +4,9 @@
 // =====================================================================
 import { chromium } from "@playwright/test";
 
+// 每次執行用不同來源 IP，避免 login rate-limit（5 次/15 分）
+const RANDOM_IP = `198.51.100.${1 + Math.floor(Math.random() * 250)}`;
+
 const base = process.argv[2] ?? "http://127.0.0.1:3911";
 const password = process.argv[3] ?? "local-test-pass";
 
@@ -19,7 +22,7 @@ page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 // 先登入（API），再用 cookie 開頁面
 await page.request.post(`${base}/api/auth/login`, {
   data: { password },
-  headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.240" },
+  headers: { "content-type": "application/json", "x-forwarded-for": RANDOM_IP },
 });
 
 await page.goto(`${base}/tools/dy-monitor/history`, { waitUntil: "domcontentloaded" });
@@ -80,7 +83,7 @@ const mobile = await browser.newContext({ viewport: { width: 390, height: 844 },
 const mp = await mobile.newPage();
 await mp.request.post(`${base}/api/auth/login`, {
   data: { password },
-  headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.241" },
+  headers: { "content-type": "application/json", "x-forwarded-for": RANDOM_IP },
 });
 await mp.goto(`${base}/tools/dy-monitor/history`, { waitUntil: "domcontentloaded" });
 await mp.waitForSelector(".dym-h-table tbody tr", { timeout: 20000 });

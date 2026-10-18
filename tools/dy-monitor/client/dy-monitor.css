@@ -1,29 +1,784 @@
 /* =====================================================================
-   DOUYIN MONITOR // 抖音直播監控台（class 前綴 dym-，不污染其他頁面）
-   版面：寬螢幕 3 欄（曲線佔兩欄、彈幕直欄），≤1200 兩欄，≤900 單欄
-   色票沿用站上 token（--ice/--dim/--faint/--line/--bg*）
+   DOUYIN MONITOR // 抖音直播監控台
+   - 版面與色彩照 Python 原版（templates/index.html + static/style.css）
+     · 青 #00e5ff / 洋紅 #ff2d78 / 檸檬綠 #9cff4d / 琥珀 #ffc223
+     · 圓角 10px 面板、monospace 數字＋光暈、卡片左側青色漸層條
+     · 3×2 主區：左上曲線、左下觀眾榜、中間彈幕（跨兩列）、右上親密度、右下貢獻榜
+   - 桌機 ≥981px 鎖 100dvh 免滾動（.tool-shell--lock）；≤1180px 單欄可滾
+   - 歷史頁沿用同一組色票（表格版面）
+   - class 前綴 dym-，不污染站上其他頁面
    ===================================================================== */
 
 .dym {
+  /* 原版調色盤（scoped，不外洩到站上） */
+  --cyan: #00e5ff;
+  --magenta: #ff2d78;
+  --lime: #9cff4d;
+  --amber: #ffc223;
+  --dym-bg: #05080d;
+  --panel: rgba(10, 18, 28, 0.82);
+  --cy-line: rgba(0, 229, 255, 0.18);
+  --txt: #d7e6f2;
+  --dim: #6d879b;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", monospace;
+
   width: 80%;
-  max-width: 1600px;
+  max-width: 1500px;
   margin: 0 auto;
-  padding: 18px 0 28px;
-  color: var(--text, #e8f4fb);
-  font-size: 13px;
+  color: var(--txt);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   position: relative;
   z-index: 10;
 }
 
-/* ── 共用元件 ─────────────────────────────────────────────── */
-.dym-dim {
-  color: var(--dim, #8fa3b3);
+/* 儀表板：撐滿 tool-body（鎖高時四段式 grid） */
+.dym-dash {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  /* 預留站上固定 ticker 的高度，避免 footer 被蓋住 */
+  padding-bottom: 1.9rem;
+  box-sizing: border-box;
 }
-.dym-up {
-  color: #59f0b0;
+
+/* ── 頂欄 ─────────────────────────────────────────────────── */
+.dym-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 0;
 }
-.dym-down {
-  color: var(--red, #ff2e4d);
+.dym-roomform {
+  flex: 1 1 340px;
+  display: flex;
+  gap: 8px;
+  min-width: 220px;
+}
+.dym-roomform input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(3, 8, 14, 0.9);
+  border: 1px solid var(--cy-line);
+  border-radius: 6px;
+  color: var(--txt);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0;
+}
+.dym-roomform input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.14);
+}
+.dym-roomform button {
+  padding: 8px 16px;
+  cursor: pointer;
+  background: linear-gradient(100deg, rgba(0, 229, 255, 0.18), rgba(255, 45, 120, 0.18));
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  color: var(--cyan);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  transition: transform 0.15s, box-shadow 0.2s;
+  white-space: nowrap;
+}
+.dym-roomform button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
+}
+.dym-roomform button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dym-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--cy-line);
+  background: rgba(4, 10, 16, 0.8);
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.dym-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+  box-shadow: 0 0 8px currentColor;
+}
+.dym-status.is-live .dot {
+  background: var(--lime);
+  animation: dym-pulse 1.6s infinite;
+}
+.dym-status.is-off .dot {
+  background: var(--magenta);
+}
+@keyframes dym-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+.dym-replaytag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffcf6b;
+  background: rgba(255, 207, 107, 0.1);
+  border: 1px solid rgba(255, 207, 107, 0.45);
+  padding: 7px 10px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.dym-btn {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--cyan);
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: 0.15s;
+  white-space: nowrap;
+}
+.dym-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.18);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+}
+.dym-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dym-btn-primary {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: rgba(0, 229, 255, 0.45);
+}
+.dym-btn b {
+  background: var(--cyan);
+  color: #03151b;
+  border-radius: 9px;
+  padding: 1px 6px;
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+.dym-input {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #d8f6ff;
+  background: #0b1a22;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.dym-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+}
+
+/* ── 資訊卡（原版 .cards） ─────────────────────────────────── */
+.dym-cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+.dym-card {
+  background: var(--panel);
+  border: 1px solid var(--cy-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.dym-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--cyan), transparent);
+  opacity: 0.55;
+}
+.dym-card h3 {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--dim);
+  letter-spacing: 0.16em;
+}
+.dym-card .val {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-family: var(--mono);
+  color: #fff;
+  text-shadow: 0 0 16px rgba(0, 229, 255, 0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dym-card .val.sm {
+  font-size: 18px;
+}
+.dym-card .sub {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 主區（原版 .grid：3 欄 × 2 列） ─────────────────────── */
+.dym-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+.dym-p-chart {
+  grid-column: 1;
+  grid-row: 1;
+}
+.dym-p-rank {
+  grid-column: 1;
+  grid-row: 2;
+}
+.dym-p-chat {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.dym-p-fans {
+  grid-column: 3;
+  grid-row: 1;
+}
+.dym-p-gifters {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.dym-panel {
+  background: var(--panel);
+  border: 1px solid var(--cy-line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+/* 捲動面板底部淡出 */
+.dym-p-chat::after,
+.dym-p-rank::after,
+.dym-p-fans::after,
+.dym-p-gifters::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26px;
+  background: linear-gradient(180deg, transparent, rgba(6, 12, 20, 0.95));
+  pointer-events: none;
+}
+.dym-phead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cy-line);
+  flex-wrap: wrap;
+}
+.dym-phead h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+}
+.dym-hint {
+  font-size: 11.5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* ── 曲線 ─────────────────────────────────────────────────── */
+.dym-chartwrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 10px 2px;
+  display: flex;
+  flex-direction: column;
+}
+.dym-svg {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 60px;
+  display: block;
+}
+.dym-chartaxis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-family: var(--mono);
+  padding: 0 6px 4px;
+}
+
+/* ── 彈幕 ─────────────────────────────────────────────────── */
+.dym-tabs {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+.dym-tab {
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: rgba(3, 10, 16, 0.75);
+  color: var(--dim);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 4px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.dym-tab:hover {
+  color: var(--txt);
+  border-color: rgba(0, 229, 255, 0.45);
+}
+.dym-tab.active {
+  color: #04121a;
+  font-weight: 700;
+  background: linear-gradient(100deg, var(--cyan), #7ef0ff);
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+.dym-tab.active[data-filter="Member"] {
+  background: linear-gradient(100deg, var(--lime), #d6ff9e);
+  border-color: var(--lime);
+  box-shadow: 0 0 12px rgba(156, 255, 77, 0.35);
+}
+.dym-tab.active[data-filter="Gift"] {
+  background: linear-gradient(100deg, var(--amber), #ffe08a);
+  border-color: var(--amber);
+  box-shadow: 0 0 12px rgba(255, 194, 35, 0.35);
+}
+
+.dym-chat {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 12px;
+  scrollbar-width: thin;
+}
+.dym-chat::-webkit-scrollbar {
+  width: 6px;
+}
+.dym-chat::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.25);
+  border-radius: 3px;
+}
+.dym-crow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.07);
+  animation: dym-slide 0.28s ease-out;
+}
+@keyframes dym-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dym-tag {
+  flex: 0 0 auto;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  letter-spacing: 0.06em;
+}
+.dym-tag.Chat {
+  color: var(--cyan);
+}
+.dym-tag.Member {
+  color: var(--lime);
+}
+.dym-tag.Gift {
+  color: var(--amber);
+}
+.dym-tag.Like {
+  color: var(--magenta);
+}
+.dym-who {
+  color: var(--cyan);
+  font-size: 12.5px;
+  flex: 0 0 auto;
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dym-say {
+  font-size: 12.5px;
+  color: var(--txt);
+  word-break: break-word;
+  min-width: 0;
+}
+.dym-crow.is-gift .dym-say {
+  color: var(--amber);
+}
+
+/* ── 榜單 table（原版 table.rank） ────────────────────────── */
+.dym-tablewrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px 8px;
+}
+.dym-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.dym-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(6, 12, 20, 0.96);
+  color: var(--dim);
+  font-weight: 500;
+  text-align: left;
+  padding: 7px 10px;
+  letter-spacing: 0.1em;
+  border-bottom: 1px solid var(--cy-line);
+  white-space: nowrap;
+}
+.dym-table td {
+  padding: 6px 10px;
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.07);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dym-table td.num,
+.dym-table th.num {
+  text-align: right;
+  font-family: var(--mono);
+}
+.dym-table tbody tr:nth-child(-n + 3) td:first-child {
+  color: var(--amber);
+  font-weight: 700;
+}
+.dym-table .empty {
+  color: var(--dim);
+  text-align: center;
+  padding: 18px;
+}
+
+/* ── 頁尾 ─────────────────────────────────────────────────── */
+.dym-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--dim);
+  font-family: var(--mono);
+  border-top: 1px solid var(--cy-line);
+  padding-top: 8px;
+  min-height: 0;
+  flex-wrap: wrap;
+}
+.dym-foot .err {
+  color: var(--amber);
+}
+.dym-foot a {
+  color: var(--cyan);
+  text-decoration: none;
+}
+.dym-foot a:hover {
+  text-decoration: underline;
+}
+
+/* ── 抽屜（原版 drawer） ──────────────────────────────────── */
+.dym-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 12, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s;
+}
+.dym-mask.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.dym-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(430px, 92vw);
+  z-index: 50;
+  background: linear-gradient(180deg, #08131a, #050b10);
+  border-left: 1px solid rgba(0, 229, 255, 0.25);
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.6);
+  transform: translateX(105%);
+  transition: transform 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.dym-drawer.is-open {
+  transform: translateX(0);
+}
+.dym-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dym-drawer-head h2 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--cyan);
+}
+.dym-x {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #8fa3b3;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.dym-x:hover {
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+.dym-drawer-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #6d8397;
+}
+
+.dym-trow {
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dym-trow.sel {
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 229, 255, 0.06);
+  box-shadow: inset 0 0 20px rgba(0, 229, 255, 0.06);
+}
+.dym-tinfo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.dym-tname {
+  font-size: 13px;
+  color: #e6fbff;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dym-trid {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #5f7a8c;
+}
+.dym-seltag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #03151b;
+  background: var(--cyan);
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+.dym-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.dym-badge.live {
+  background: rgba(255, 45, 120, 0.18);
+  color: var(--magenta);
+  border: 1px solid rgba(255, 45, 120, 0.4);
+}
+.dym-badge.off {
+  background: rgba(255, 255, 255, 0.06);
+  color: #7c8f9e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.dym-badge.warn {
+  color: var(--amber);
+  border: 1px solid rgba(255, 194, 35, 0.45);
+  background: rgba(255, 194, 35, 0.1);
+}
+
+.dym-switches {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.dym-tg-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dym-tg {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #132029;
+  border: 1px solid #263745;
+  cursor: pointer;
+  padding: 0;
+  transition: 0.15s;
+}
+.dym-tg i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #54697a;
+  transition: 0.15s;
+}
+.dym-tg.on {
+  background: rgba(0, 229, 255, 0.22);
+  border-color: rgba(0, 229, 255, 0.7);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+.dym-tg.on i {
+  left: 18px;
+  background: var(--cyan);
+}
+.dym-tg-label {
+  font-size: 11px;
+  color: #8ba2b4;
+}
+.dym-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  background: rgba(3, 10, 16, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.dym-chip.on {
+  color: #04121a;
+  background: linear-gradient(100deg, var(--cyan), #7ef0ff);
+  border-color: var(--cyan);
+  font-weight: 700;
+}
+.dym-chip.danger:hover {
+  border-color: #ff4d4d;
+  color: #ff4d4d;
+}
+.dym-caps {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+.dym-drawer-foot {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 10px;
+}
+.dym-notifs {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.dym-nrow {
+  display: grid;
+  grid-template-columns: 34px 58px 44px 1fr;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8ba2b4;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  padding-bottom: 5px;
+}
+.dym-nrow .good {
+  color: var(--lime);
+}
+.dym-nrow .bad {
+  color: var(--magenta);
 }
 .dym-ellipsis {
   overflow: hidden;
@@ -31,109 +786,80 @@
   white-space: nowrap;
 }
 .dym-empty {
-  color: var(--faint, #5c6b78);
+  color: var(--dim);
   font-size: 12px;
-  padding: 10px 2px;
+  padding: 12px 4px;
+  text-align: center;
+}
+
+/* ── 鎖定 / 載入 / toast ──────────────────────────────────── */
+.dym-lock {
+  min-height: 70dvh;
+  display: grid;
+  place-items: center;
+  position: relative;
+  z-index: 10;
+}
+.dym-lock-panel {
+  width: min(360px, 86vw);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 10px;
+  background: rgba(8, 14, 20, 0.94);
+  padding: 26px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(0, 229, 255, 0.08);
+}
+.dym-lock-title {
+  font-family: var(--mono);
+  font-size: 20px;
+  letter-spacing: 0.28em;
+  color: var(--cyan);
+}
+.dym-lock-sub {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.dym-err {
+  color: var(--magenta);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+}
+.dym-loading {
+  min-height: 60dvh;
+  display: grid;
+  place-items: center;
+  letter-spacing: 0.3em;
+  color: var(--cyan);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.dym-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  background: rgba(8, 14, 20, 0.95);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  color: #d7e6f2;
+  font-size: 12px;
+  padding: 8px 16px;
+  z-index: 70;
   letter-spacing: 0.04em;
 }
 
-.dym-btn {
-  font-family: inherit;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ice, #a8e6ff);
-  background: rgba(168, 230, 255, 0.06);
-  border: 1px solid rgba(168, 230, 255, 0.28);
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
-}
-.dym-btn:hover {
-  background: rgba(168, 230, 255, 0.14);
-  border-color: rgba(168, 230, 255, 0.55);
-}
-.dym-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.dym-btn-primary {
-  background: linear-gradient(120deg, rgba(255, 46, 77, 0.25), rgba(201, 166, 255, 0.22));
-  border-color: rgba(255, 159, 229, 0.4);
-  color: var(--cold, #eef7ff);
-}
-.dym-btn-ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.16);
-  color: var(--dim, #8fa3b3);
-}
-
-.dym-input {
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--cold, #eef7ff);
-  background: rgba(7, 7, 11, 0.72);
-  border: 1px solid rgba(168, 230, 255, 0.2);
-  padding: 7px 10px;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
-}
-.dym-input:focus {
-  border-color: rgba(168, 230, 255, 0.6);
-  box-shadow: 0 0 0 1px rgba(168, 230, 255, 0.18);
-}
-
-.dym-badge {
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  padding: 2px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: var(--dim, #8fa3b3);
-  white-space: nowrap;
-}
-.dym-badge-ice {
-  color: var(--ice, #a8e6ff);
-  border-color: rgba(168, 230, 255, 0.4);
-}
-.dym-badge-warn {
-  color: #ffcf6b;
-  border-color: rgba(255, 207, 107, 0.4);
-}
-.dym-badge-replay {
-  color: #ffb36b;
-  border-color: rgba(255, 179, 107, 0.5);
-}
-
-.dym-chip {
-  font-family: inherit;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--dim, #8fa3b3);
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 3px 8px;
-  cursor: pointer;
-}
-.dym-chip.on {
-  color: var(--ice, #a8e6ff);
-  border-color: rgba(168, 230, 255, 0.5);
-  background: rgba(168, 230, 255, 0.1);
-}
-.dym-chip-danger.on,
-.dym-chip-danger:hover {
-  color: var(--red, #ff2e4d);
-  border-color: rgba(255, 46, 77, 0.5);
-}
-
-/* ── 標題列 ───────────────────────────────────────────────── */
+/* ── 歷史頁（沿用同一組色票；版面為表格） ─────────────────── */
 .dym-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   padding: 4px 2px 12px;
-  border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-bottom: 1px solid var(--cy-line);
   flex-wrap: wrap;
 }
 .dym-head-left {
@@ -147,119 +873,106 @@
   align-items: center;
   gap: 8px;
 }
-.dym-live {
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  color: var(--faint, #5c6b78);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 2px 8px;
-}
-.dym-live.is-live {
-  color: #59f0b0;
-  border-color: rgba(89, 240, 176, 0.45);
-  text-shadow: 0 0 10px rgba(89, 240, 176, 0.5);
-}
 .dym-anchor {
   font-size: 15px;
   letter-spacing: 0.06em;
-  color: var(--cold, #eef7ff);
+  color: #fff;
+  text-shadow: 0 0 14px rgba(0, 229, 255, 0.3);
 }
 .dym-title {
-  color: var(--dim, #8fa3b3);
+  color: var(--dim);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 40vw;
 }
-
-/* ── KPI ──────────────────────────────────────────────────── */
+.dym-dim {
+  color: var(--dim);
+}
+.dym-up {
+  color: var(--lime);
+}
+.dym-down {
+  color: var(--magenta);
+}
 .dym-kpis {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 10px;
   margin: 14px 0;
 }
 .dym-kpi {
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
-  background: rgba(8, 10, 16, 0.86);
-  backdrop-filter: blur(10px);
+  background: var(--panel);
+  border: 1px solid var(--cy-line);
+  border-radius: 10px;
   padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
   min-width: 0;
 }
+.dym-kpi::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--cyan), transparent);
+  opacity: 0.55;
+}
 .dym-kpi-label {
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  color: var(--faint, #5c6b78);
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--dim);
 }
 .dym-kpi-value {
-  font-family: Rajdhani, "Noto Sans TC", sans-serif;
-  font-size: 26px;
+  font-family: var(--mono);
+  font-size: 22px;
   line-height: 1.15;
-  color: var(--cold, #eef7ff);
+  color: #fff;
+  text-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
   margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dym-kpi-sub {
-  font-size: 10px;
-  color: var(--dim, #8fa3b3);
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* ── 版面格線 ─────────────────────────────────────────────── */
 .dym-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  grid-template-areas:
-    "chart chart chat"
-    "fans rank chat"
-    "gifts status chat";
-  gap: 10px;
+  gap: 12px;
   align-items: stretch;
 }
-.dym-panel-chart {
-  grid-area: chart;
-}
-.dym-panel-chat {
-  grid-area: chat;
-  min-height: 0;
-}
-.dym-grid > .dym-panel:nth-child(3) {
-  grid-area: fans;
-}
-.dym-grid > .dym-panel:nth-child(4) {
-  grid-area: rank;
-}
-.dym-grid > .dym-panel:nth-child(5) {
-  grid-area: gifts;
-}
-.dym-panel-status {
-  grid-area: status;
-}
-
-.dym-panel {
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
-  background: rgba(8, 10, 16, 0.86);
-  backdrop-filter: blur(10px);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
+.dym-grid-history {
+  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-areas:
+    "chart chart chart"
+    "gifts audience fans"
+    "giftnames giftnames giftnames";
 }
 .dym-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--faint, #5c6b78);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cy-line);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  flex-wrap: wrap;
+}
+.dym-panel-head span:first-child {
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
 }
 .dym-panel-body {
   padding: 10px 12px;
@@ -267,347 +980,81 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-
-/* ── 曲線 ─────────────────────────────────────────────────── */
+.dym-panel-chart {
+  grid-area: chart;
+}
+.dym-grid-history > .dym-panel:nth-child(2) {
+  grid-area: gifts;
+}
+.dym-grid-history > .dym-panel:nth-child(3) {
+  grid-area: audience;
+}
+.dym-grid-history > .dym-panel:nth-child(4) {
+  grid-area: fans;
+}
+.dym-grid-history > .dym-panel:nth-child(5) {
+  grid-area: giftnames;
+}
 .dym-chart {
   display: flex;
   flex-direction: column;
   padding: 8px 12px 10px;
   height: 100%;
-  min-height: 200px;
+  min-height: 180px;
 }
 .dym-chart-head,
 .dym-chart-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--faint, #5c6b78);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  font-family: var(--mono);
 }
 .dym-chart-head {
-  color: var(--dim, #8fa3b3);
   padding-bottom: 6px;
 }
 .dym-chart-foot {
   padding-top: 4px;
 }
-.dym-svg {
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 120px;
-}
-
-/* ── 彈幕 ─────────────────────────────────────────────────── */
-.dym-filters {
-  display: flex;
-  gap: 4px;
-}
-.dym-chat {
-  font-size: 12px;
-  max-height: 420px;
-}
-.dym-chat-row {
-  display: grid;
-  grid-template-columns: 60px minmax(60px, 110px) 1fr;
-  gap: 6px;
-  padding: 2px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  line-height: 1.5;
-}
-.dym-chat-row .dym-dim {
-  font-size: 10px;
-  letter-spacing: 0.04em;
-}
-.dym-nick {
-  color: var(--ice, #a8e6ff);
+.dym-fans-meta {
+  display: block;
+  font-size: 11.5px;
+  color: var(--dim);
+  padding: 7px 4px 6px;
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.1);
+  margin-bottom: 4px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.dym-content {
-  color: var(--text, #e8f4fb);
-  word-break: break-word;
-}
-.dym-t-Gift .dym-content {
-  color: var(--pink, #ff9fe5);
-}
-.dym-t-Gift .dym-nick {
-  color: var(--pink, #ff9fe5);
-}
-.dym-t-Member .dym-nick,
-.dym-t-Like .dym-nick {
-  color: var(--dim, #8fa3b3);
-}
-.dym-t-Member .dym-content,
-.dym-t-Like .dym-content {
-  color: var(--dim, #8fa3b3);
-  font-style: italic;
-}
-
-/* ── 榜單 ─────────────────────────────────────────────────── */
-.dym-fans-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--dim, #8fa3b3);
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  margin-bottom: 4px;
+.dym-fans-meta b {
+  color: var(--cyan);
+  font-weight: 600;
 }
 .dym-rank-row {
   display: grid;
-  grid-template-columns: 20px minmax(60px, 1fr) auto auto;
+  grid-template-columns: 22px minmax(60px, 1fr) auto auto;
   align-items: center;
   gap: 8px;
-  padding: 3px 0;
-  font-size: 12px;
+  padding: 4px 0;
+  font-size: 12.5px;
 }
 .dym-rank-idx {
-  font-family: Rajdhani, sans-serif;
-  color: var(--faint, #5c6b78);
+  font-family: var(--mono);
+  color: var(--dim);
 }
-.dym-rank-score {
-  font-family: Rajdhani, sans-serif;
-  color: var(--ice, #a8e6ff);
-}
-
-/* ── SYSTEM ───────────────────────────────────────────────── */
-.dym-status {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--dim, #8fa3b3);
-}
-.dym-status b {
-  color: var(--cold, #eef7ff);
-  font-weight: 600;
-}
-
-/* ── 抽屜 ─────────────────────────────────────────────────── */
-.dym-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100dvh;
-  width: min(420px, 92vw);
-  background: rgba(8, 9, 14, 0.97);
-  border-left: 1px solid rgba(168, 230, 255, 0.22);
-  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.55);
-  transform: translateX(105%);
-  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  padding: 14px;
-  gap: 10px;
-  box-sizing: border-box;
-}
-.dym-drawer.is-open {
-  transform: translateX(0);
-}
-.dym-drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ice, #a8e6ff);
-}
-.dym-add {
-  display: flex;
-  gap: 6px;
-}
-.dym-targets {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.dym-target {
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.02);
-  padding: 8px;
-}
-.dym-target.is-sel {
-  border-color: rgba(168, 230, 255, 0.45);
-  background: rgba(168, 230, 255, 0.06);
-}
-.dym-target-main {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  min-width: 0;
-}
-.dym-target-name {
-  color: var(--cold, #eef7ff);
+.dym-nick {
+  color: var(--cyan);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dym-target-actions {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-  flex-wrap: wrap;
+.dym-rank-score {
+  font-family: var(--mono);
+  color: var(--amber);
 }
-.dym-caps {
-  display: flex;
-  gap: 4px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.08);
-  flex-wrap: wrap;
-}
-.dym-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  flex: 0 0 auto;
-}
-.dym-dot.is-live {
-  background: #59f0b0;
-  box-shadow: 0 0 8px rgba(89, 240, 176, 0.8);
-}
-.dym-drawer-foot {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 8px;
-}
-.dym-notifs {
-  margin-top: 8px;
-  max-height: 180px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 11px;
-}
-.dym-notif {
-  display: grid;
-  grid-template-columns: 34px 52px 42px 1fr;
-  gap: 6px;
-  align-items: center;
-}
-
-/* ── 鎖定 / 載入 / toast ──────────────────────────────────── */
-.dym-lock {
-  min-height: 70dvh;
-  display: grid;
-  place-items: center;
-  position: relative;
-  z-index: 10;
-}
-.dym-lock-panel {
-  width: min(360px, 86vw);
-  border: 1px solid rgba(168, 230, 255, 0.25);
-  background: rgba(8, 9, 14, 0.9);
-  padding: 26px 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: center;
-  box-shadow: 0 0 60px rgba(168, 230, 255, 0.08);
-}
-.dym-lock-title {
-  font-family: Rajdhani, sans-serif;
-  font-size: 22px;
-  letter-spacing: 0.3em;
-  color: var(--ice, #a8e6ff);
-}
-.dym-lock-sub {
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--faint, #5c6b78);
-}
-.dym-err {
-  color: var(--red, #ff2e4d);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-}
-.dym-loading {
-  min-height: 60dvh;
-  display: grid;
-  place-items: center;
-  letter-spacing: 0.3em;
-  color: var(--ice, #a8e6ff);
-  font-size: 12px;
-}
-.dym-toast {
-  position: fixed;
-  left: 50%;
-  bottom: 34px;
-  transform: translateX(-50%);
-  background: rgba(8, 9, 14, 0.95);
-  border: 1px solid rgba(168, 230, 255, 0.35);
-  color: var(--cold, #eef7ff);
-  font-size: 12px;
-  padding: 8px 16px;
-  z-index: 70;
-  letter-spacing: 0.04em;
-}
-
-/* ── RWD ──────────────────────────────────────────────────── */
-@media (max-width: 1400px) {
-  .dym {
-    width: 92%;
-  }
-}
-@media (max-width: 1200px) {
-  .dym-kpis {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .dym-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "chart chart"
-      "fans rank"
-      "gifts status"
-      "chat chat";
-  }
-  .dym-chat {
-    max-height: 360px;
-  }
-}
-@media (max-width: 900px) {
-  .dym {
-    width: 94%;
-    padding-top: 12px;
-  }
-  .dym-kpis {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .dym-grid {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "chart"
-      "chat"
-      "fans"
-      "rank"
-      "gifts"
-      "status";
-  }
-  .dym-title {
-    max-width: 60vw;
-  }
-  .dym-head {
-    align-items: flex-start;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dym-drawer {
-    transition: none;
-  }
-}
-
-/* ── 歷史場次（P3）──────────────────────────────────────────── */
 .dym-h-wrap {
   overflow-x: auto;
   padding: 0;
@@ -615,25 +1062,24 @@
 .dym-h-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 12.5px;
 }
 .dym-h-table th {
   position: sticky;
   top: 0;
-  background: rgba(8, 10, 16, 0.96);
+  background: rgba(6, 12, 20, 0.96);
   text-align: left;
   font-weight: 500;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--faint, #5c6b78);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--cy-line);
   white-space: nowrap;
 }
 .dym-h-table td {
   padding: 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.07);
   white-space: nowrap;
 }
 .dym-h-table .dym-badge {
@@ -644,7 +1090,7 @@
   transition: background 0.14s;
 }
 .dym-h-table tbody tr:hover {
-  background: rgba(168, 230, 255, 0.07);
+  background: rgba(0, 229, 255, 0.07);
 }
 .dym-h-events tbody tr {
   cursor: default;
@@ -660,8 +1106,10 @@
   justify-content: center;
   gap: 14px;
   padding: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(0, 229, 255, 0.1);
   font-size: 11px;
+  color: var(--dim);
+  font-family: var(--mono);
 }
 .dym-search {
   display: flex;
@@ -673,29 +1121,46 @@
   padding: 3px 8px;
   font-size: 11px;
 }
-.dym-grid-history {
-  grid-template-columns: 1.5fr 1fr 1fr;
-  grid-template-areas:
-    "chart chart chart"
-    "gifts audience fans"
-    "giftnames giftnames giftnames";
-}
-.dym-grid-history > .dym-panel:nth-child(2) {
-  grid-area: gifts;
-}
-.dym-grid-history > .dym-panel:nth-child(3) {
-  grid-area: audience;
-}
-.dym-grid-history > .dym-panel:nth-child(4) {
-  grid-area: fans;
-}
-.dym-grid-history > .dym-panel:nth-child(5) {
-  grid-area: giftnames;
+.dym-filters {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 .dym-rank-gift {
   grid-template-columns: minmax(80px, 1fr) auto auto;
 }
-@media (max-width: 1200px) {
+
+/* ── RWD（照原版：≤1180 三欄卡＋單欄主區；≤620 單欄卡） ───── */
+@media (max-width: 1400px) {
+  .dym {
+    width: 90%;
+  }
+}
+@media (max-width: 1180px) {
+  .dym {
+    width: 94%;
+  }
+  .dym-cards,
+  .dym-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dym-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 280px 320px 260px 260px 260px;
+  }
+  .dym-p-chart,
+  .dym-p-chat,
+  .dym-p-fans,
+  .dym-p-gifters,
+  .dym-p-rank {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .dym-dash {
+    height: auto;
+    grid-template-rows: auto auto auto auto;
+  }
   .dym-grid-history {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
@@ -705,6 +1170,12 @@
   }
 }
 @media (max-width: 900px) {
+  .dym {
+    width: 94%;
+  }
+  .dym-title {
+    max-width: 60vw;
+  }
   .dym-grid-history {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -713,5 +1184,35 @@
       "audience"
       "fans"
       "giftnames";
+  }
+}
+@media (max-width: 620px) {
+  .dym-cards,
+  .dym-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dym-main {
+    grid-template-rows: 220px 300px 240px 240px 240px;
+  }
+  .dym-drawer {
+    width: 100vw;
+  }
+  .dym-card .val {
+    font-size: 22px;
+  }
+}
+
+/* 鎖高容器內：981–1180px 走單欄，需要內部滾動（原版此時也是 body 滾動） */
+@media (min-width: 981px) and (max-width: 1180px) {
+  .tool-shell--lock .tool-body:has(.dym) {
+    overflow-y: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dym-drawer,
+  .dym-crow {
+    transition: none;
+    animation: none;
   }
 }
