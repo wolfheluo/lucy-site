@@ -36,3 +36,6 @@ dist-server
 # Playwright artifacts
 test-results
 playwright-report
+
+# dy-monitor 真實封包 fixtures（含第三方聊天內容，不進 repo）
+.dy-fixtures/
