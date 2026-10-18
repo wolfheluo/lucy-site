@@ -6,6 +6,7 @@ import { lazy, type ComponentType } from "react";
 import type { ToolMeta, ToolProjectCard } from "../tools/types";
 import { fileVaultMeta, fileVaultProjectCard } from "../tools/file-vault/meta";
 import { binanceApiMeta, binanceApiProjectCard } from "../tools/binance-api/meta";
+import { dyMonitorMeta, dyMonitorProjectCard } from "../tools/dy-monitor/meta";
 
 export interface ClientTool {
   meta: ToolMeta;
@@ -15,10 +16,12 @@ export interface ClientTool {
 
 const FileVaultPage = lazy(() => import("../tools/file-vault/client/FileVaultPage"));
 const BinanceApiPage = lazy(() => import("../tools/binance-api/client/BinanceApiPage"));
+const DyMonitorPage = lazy(() => import("../tools/dy-monitor/client/DyMonitorPage"));
 
 export const CLIENT_TOOLS: ClientTool[] = [
   { meta: fileVaultMeta, Component: FileVaultPage, projectCard: fileVaultProjectCard },
   { meta: binanceApiMeta, Component: BinanceApiPage, projectCard: binanceApiProjectCard },
+  { meta: dyMonitorMeta, Component: DyMonitorPage, projectCard: dyMonitorProjectCard },
 ];
 
 export interface ToolProjectEntry extends ToolProjectCard {

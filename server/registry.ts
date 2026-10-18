@@ -11,10 +11,13 @@ import { fileVaultMeta } from "../tools/file-vault/meta.js";
 import { registerFileVault } from "../tools/file-vault/server/router.js";
 import { binanceApiMeta } from "../tools/binance-api/meta.js";
 import { registerBinanceApi } from "../tools/binance-api/server/router.js";
+import { dyMonitorMeta } from "../tools/dy-monitor/meta.js";
+import { registerDyMonitor } from "../tools/dy-monitor/server/router.js";
 
 export const SERVER_TOOLS: ServerToolModule[] = [
   { meta: fileVaultMeta, register: registerFileVault },
   { meta: binanceApiMeta, register: registerBinanceApi },
+  { meta: dyMonitorMeta, register: registerDyMonitor },
 ];
 
 /** 依序讓每個 tool 把自己的路由掛到 app；收集各 tool 的生命週期 handle */

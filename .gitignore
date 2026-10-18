@@ -39,3 +39,6 @@ playwright-report
 
 # dy-monitor 真實封包 fixtures（含第三方聊天內容，不進 repo）
 .dy-fixtures/
+
+# dy-monitor 本地 E2E 資料（匯入測試用）
+.dy-e2e-data/

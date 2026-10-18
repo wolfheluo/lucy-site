@@ -49,6 +49,7 @@ export interface DyIntervals {
   status: number;
   capture: number;
   snapshot: number;
+  snapshotBg: number;
   rankBg: number;
   catalogTtl: number;
   cooldown: number;
@@ -64,7 +65,8 @@ export const DEFAULT_INTERVALS: DyIntervals = {
   fans: 60,
   status: 60,
   capture: 10,
-  snapshot: 60,
+  snapshot: 30,
+  snapshotBg: 60,
   rankBg: 60,
   catalogTtl: 3600,
   cooldown: 300,
@@ -394,6 +396,7 @@ export class DyEngine {
 
   private async refreshRank(snap: RoomSnapshot): Promise<void> {
     this.lastRank = this.now();
+    if (!this.abogusReady) return; // 簽名未啟用：直接跳過，不打端點也不記錯誤
     const rid = snap.web_rid;
     try {
       const res = await this.client.audienceList(snap);
@@ -691,7 +694,7 @@ export class DyEngine {
     const { id: sid } = this.store.ensureSession(snap, { source: "app", flags });
     this.wardenSids.set(rid, sid);
 
-    if (flags.snap && now - (this.wardenLastSnap.get(rid) ?? 0) >= this.intervals.snapshot) {
+    if (flags.snap && now - (this.wardenLastSnap.get(rid) ?? 0) >= this.intervals.snapshotBg) {
       this.store.addSnapshot(sid, snap);
       this.store.flushNow();
       this.store.refreshSummary(sid, snap);
@@ -728,6 +731,7 @@ export class DyEngine {
   }
 
   private async captureRank(sid: number, snap: RoomSnapshot): Promise<void> {
+    if (!this.abogusReady) return;
     try {
       const res = await this.client.audienceList(snap);
       if (res.members.length > 0) this.store.addRank(sid, "audience", res.members);
