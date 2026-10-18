@@ -20,7 +20,7 @@ import { DyMonitorStore } from "./store.js";
 import { DyClient } from "./dycore.js";
 import { DyEngine, MAX_TARGETS, parseRid } from "./engine.js";
 import { pushLine } from "./line.js";
-import { stubSigner } from "./signer.js";
+import { abogusSigner } from "./abogus.js";
 
 /** 表單/JSON 的寬鬆布林（"1"/"true"/"on" → 1） */
 function boolOf(v: unknown, fallback = 1): number {
@@ -37,7 +37,7 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
 
   const cookieFile =
     process.env.DY_COOKIE_FILE || path.join(os.homedir(), "dy_cookies.json");
-  const client = new DyClient({ cookieFile });
+  const client = new DyClient({ cookieFile, signer: abogusSigner });
   const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || "";
   const lineTo = process.env.LINE_TO || "";
 
@@ -47,7 +47,7 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
     dashboardUrl: process.env.DY_DASHBOARD_URL || "",
     log,
     instanceId: process.env.NODE_APP_INSTANCE ?? null,
-    abogusReady: stubSigner.ready,
+    abogusReady: abogusSigner.ready,
     notifier: async (_kind, _rid, text) =>
       pushLine({ token: lineToken, to: lineTo }, text),
   });
@@ -312,7 +312,7 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
       stats_age: snapTs ? Math.round((Date.now() / 1000 - snapTs) * 10) / 10 : null,
       rank_ok: state.api.rank_ok,
       chat_ok: state.api.chat_ok,
-      abogus: stubSigner.ready,
+      abogus: abogusSigner.ready,
       cookie: Boolean(client.cookie),
       line: Boolean(lineToken && lineTo),
       db_size_mb: Math.round((store.sizeBytes() / 1048576) * 10) / 10,

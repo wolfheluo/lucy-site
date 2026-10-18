@@ -140,7 +140,7 @@ describe("health 與清單", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as Record<string, unknown>;
     expect(json.ok).toBe(true);
-    expect(json.abogus).toBe(false); // P1：簽名尚未移植
+    expect(json.abogus).toBe(true); // P2：a_bogus 已移植
     expect(json.max_targets).toBe(5);
     expect(json.targets).toBe(2);
     expect(typeof json.db_size_mb).toBe("number");

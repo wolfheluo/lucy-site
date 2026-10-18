@@ -229,14 +229,14 @@ export class DyClient {
       const fc = fcData ?? {};
       return {
         rank: Number(row.rank ?? idx + 1),
-        nickname: String(u.desensitized_nickname ?? u.nickname ?? "（匿名）"),
+        nickname: String(u.desensitized_nickname || u.nickname || "（匿名）"),
         pay_level: Number(pg.level ?? 0),
         fans_level: Number(fc.level ?? 0),
         guard: Boolean(fc.user_guard_status),
         mystery: Boolean(u.mystery_man),
       };
     });
-    return { members, total: String(d.user_count_desc ?? "") };
+    return { members, total: String(d.user_count_desc || "") };
   }
 
   // ---------- 3) 彈幕（免簽名，cursor 增量）----------
@@ -302,15 +302,15 @@ export class DyClient {
       const fi = (u.user_fansclub_info ?? {}) as Record<string, unknown>;
       const ui = (u.user_info ?? {}) as Record<string, unknown>;
       return {
-        nickname: String(ui.nickname ?? "（遮蔽）"),
+        nickname: String(ui.nickname || "（遮蔽）"),
         intimacy: Number(fi.intimacy ?? 0),
         level: Number(fi.level ?? 0),
       };
     });
     members.sort((a, b) => b.intimacy - a.intimacy);
     return {
-      club_name: String(ci.name ?? ""),
-      fans_name: String(ci.fans_name ?? ""),
+      club_name: String(ci.name || ""),
+      fans_name: String(ci.fans_name || ""),
       active: Number(ci.active_fans_count ?? 0),
       total: Number(ci.total_fans_count ?? 0),
       members: members.slice(0, 10),
@@ -334,8 +334,8 @@ export class DyClient {
     const ci = (d.club_info ?? {}) as Record<string, unknown>;
     const lv = (ci.club_level_info ?? {}) as Record<string, unknown>;
     return {
-      club_name: String(ci.name ?? ""),
-      fans_name: String(ci.fans_name ?? ""),
+      club_name: String(ci.name || ""),
+      fans_name: String(ci.fans_name || ""),
       active: Number(ci.active_fans_count ?? 0),
       total: Number(ci.total_fans_count ?? 0),
       today_new: Number(ci.today_new_fans_count ?? 0),

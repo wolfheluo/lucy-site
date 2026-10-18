@@ -12,14 +12,19 @@ data remains interpretable by both implementations.
 | Phase | Content | Status |
 |---|---|---|
 | P1 | Core monitoring: room snapshots, chat/gift/member events, watch list, LINE notifications, offline replay, login-walled dashboard | Implemented |
-| P2 | `a_bogus` request signing for the online-audience ranking (`/webcast/ranklist/audience/`) | Not implemented (documented seam) |
+| P2 | `a_bogus` request signing for the online-audience ranking (`/webcast/ranklist/audience/`) | Implemented (`server/abogus.ts`) |
 | P3 | Session history pages and CLI parity | Out of scope for P1 |
 
-The audience ranking is the only feature that requires a signed request. `server/signer.ts`
-exposes the interface and returns an explicit `{ ok: false, reason }` result, so the rest of
-the engine continues to operate and the interface reports the panel as pending. The ranking
-fetch path is skipped entirely while the signer is unavailable, which prevents periodic
-failed requests and log noise.
+The audience ranking is the only feature that requires a signed request. `server/abogus.ts`
+is a line-for-line port of the earlier Python implementation (SM3, RC4, two custom base64
+alphabets, and a stateful byte permutation). It exposes the `AbogusSigner` interface from
+`server/signer.ts`, so the engine can also run with a stub signer: when the signer reports
+`ready: false`, the ranking fetch path is skipped entirely instead of failing every cycle.
+
+Parity with the Python implementation is verified by comparing intermediate products (SM3
+digest, base64 output, RC4 output, transformed byte string, the three digest arrays) and the
+final signature under fixed time and random inputs. Live acceptance is measured against the
+real endpoint: ten consecutive signed requests returned a populated ranking.
 
 ## 2. Architecture
 
@@ -132,7 +137,8 @@ npx vitest run tests/dy-monitor-*.test.ts                       # parser, store,
 
 ## 7. Known Limitations
 
-* The audience ranking remains disabled until the `a_bogus` implementation is added.
+* The `a_bogus` implementation must be updated if the upstream algorithm changes; a
+  signature failure degrades the ranking panel only, and the failure mode is explicit.
 * `inter` counters are incremented before message de-duplication, matching the Python
   implementation; overlapping cursors can therefore over-count interaction totals while the
   chat queue and database remain de-duplicated.
