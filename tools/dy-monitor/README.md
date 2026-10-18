@@ -13,7 +13,7 @@ data remains interpretable by both implementations.
 |---|---|---|
 | P1 | Core monitoring: room snapshots, chat/gift/member events, watch list, LINE notifications, offline replay, login-walled dashboard | Implemented |
 | P2 | `a_bogus` request signing for the online-audience ranking (`/webcast/ranklist/audience/`) | Implemented (`server/abogus.ts`) |
-| P3 | Session history pages and CLI parity | Out of scope for P1 |
+| P3 | Session history pages and CLI parity | Implemented (`/tools/dy-monitor/history`, `scripts/dy-cli.mjs`) |
 
 The audience ranking is the only feature that requires a signed request. `server/abogus.ts`
 is a line-for-line port of the earlier Python implementation (SM3, RC4, two custom base64
@@ -95,6 +95,9 @@ request receives `401`.
 | GET | `/notifications?limit=` | Recent delivery attempts |
 | POST | `/notify/test` | Sends a test message and records the outcome |
 | GET | `/health` | Engine state, data age, credential presence, database size |
+| GET | `/history/sessions?limit&offset&web_rid` | Paginated session list |
+| GET | `/history/session/:sid` | Session detail: ranks, fans snapshot, gift aggregates, event counts, series |
+| GET | `/history/session/:sid/events?type&q&limit&offset` | Paginated events with type filter and keyword search |
 
 ## 5. Configuration
 
@@ -131,8 +134,13 @@ database in `/root/backups/lucy-site/`.
 Verification utilities:
 
 ```bash
-node scripts/dy-ui-check.mjs http://127.0.0.1:3001 <password>   # lock screen → dashboard → drawer → mobile
-npx vitest run tests/dy-monitor-*.test.ts                       # parser, store, engine, API
+node scripts/dy-ui-check.mjs http://127.0.0.1:3001 <password>          # lock screen → dashboard → drawer → mobile
+node scripts/dy-history-ui-check.mjs http://127.0.0.1:3001 <password>   # history list → detail → filter → search
+npx vitest run tests/dy-monitor-*.test.ts                              # parser, store, engine, abogus, API
+
+DY_CLI_PASSWORD=<password> node scripts/dy-cli.mjs list
+DY_CLI_PASSWORD=<password> node scripts/dy-cli.mjs show <session_id>
+DY_CLI_PASSWORD=<password> node scripts/dy-cli.mjs events <session_id> --type Gift --limit 50
 ```
 
 ## 7. Known Limitations

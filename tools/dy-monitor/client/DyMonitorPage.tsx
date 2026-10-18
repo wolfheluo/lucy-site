@@ -4,7 +4,9 @@
 //  - 2 秒輪詢 /state（cursor 增量併入彈幕）；/targets 每 15 秒刷新
 //  - 選中房離線時自動抓 /replay（60 秒快取）顯示歷史回放
 // =====================================================================
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
+import ViewerChart from "./ViewerChart";
 import {
   ApiError,
   UnauthorizedError,
@@ -82,58 +84,6 @@ function LockPanel({ onUnlocked }: { onUnlocked: () => void }) {
         </button>
         {err && <div className="dym-err">{err}</div>}
       </form>
-    </div>
-  );
-}
-
-// ─────────────────────────── 人數曲線 ───────────────────────────
-function ViewerChart({
-  series,
-  replay,
-}: {
-  series: { ts: number; viewers: number; likes: number }[];
-  replay: boolean;
-}) {
-  const data = useMemo(() => series.slice(-240), [series]);
-  const max = Math.max(1, ...data.map((d) => d.viewers));
-  const w = 600;
-  const h = 150;
-  const points = data
-    .map((d, i) => {
-      const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * w;
-      const y = h - (d.viewers / max) * (h - 12) - 6;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const area = points ? `${points} ${w},${h} 0,${h}` : "";
-  const last = data[data.length - 1];
-  const first = data[0];
-  const delta = last && first ? last.viewers - first.viewers : 0;
-
-  return (
-    <div className="dym-chart">
-      <div className="dym-chart-head">
-        <span>在線人數</span>
-        <span className="dym-dim">{replay ? "上場全程" : "近 5 分鐘"}</span>
-        <span className={delta >= 0 ? "dym-up" : "dym-down"}>
-          {delta >= 0 ? "▲" : "▼"} {num(Math.abs(delta))}
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="dym-svg">
-        <defs>
-          <linearGradient id="dymFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(168,230,255,0.22)" />
-            <stop offset="100%" stopColor="rgba(168,230,255,0)" />
-          </linearGradient>
-        </defs>
-        {data.length > 2 && <polygon points={area} fill="url(#dymFill)" />}
-        {points && <polyline points={points} fill="none" stroke="var(--ice)" strokeWidth="1.6" />}
-      </svg>
-      <div className="dym-chart-foot">
-        <span>{data.length ? hhmmss(data[0]!.ts) : "--:--:--"}</span>
-        <span>峰值 {compact(max)}</span>
-        <span>{last ? hhmmss(last.ts) : "--:--:--"}</span>
-      </div>
     </div>
   );
 }
@@ -493,6 +443,9 @@ export default function DyMonitorPage() {
             </span>
           )}
           {!state?.api.abogus && <span className="dym-badge dym-badge-warn">榜單待啟用</span>}
+          <Link className="dym-btn" to="/tools/dy-monitor/history">
+            ◷ 歷史場次
+          </Link>
           <button className="dym-btn" type="button" onClick={() => setDrawer(true)}>
             ☰ 監控清單 {targets.length}
           </button>

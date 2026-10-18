@@ -34,6 +34,7 @@ const CAPS = ["cap_chat", "cap_gift", "cap_member", "cap_snap", "cap_rank"] as c
 export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
   const log = (m: string) => console.log(m);
   const store = new DyMonitorStore(path.join(ctx.dataDir, "dy-monitor.db"), { log });
+  const db = store.db;
 
   const cookieFile =
     process.env.DY_COOKIE_FILE || path.join(os.homedir(), "dy_cookies.json");
@@ -180,7 +181,6 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
 
   api.get("/replay/:rid", (c) => {
     const rid = c.req.param("rid");
-    const db = store.db;
     let session = db
       .prepare(
         `SELECT * FROM sessions WHERE web_rid=?
@@ -287,6 +287,128 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
         })),
       },
     });
+  });
+
+  // ---------- 歷史場次（P3）----------
+  api.get("/history/sessions", (c) => {
+    const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 200);
+    const offset = Number(c.req.query("offset") ?? 0) || 0;
+    const rid = c.req.query("web_rid") ?? "";
+    const base = `SELECT id, web_rid, source, anchor_name, title, started_at, ended_at, partial,
+                         gift_diamonds, gift_events, chat_count, member_count, peak_viewers,
+                         avg_viewers, total_user, likes_start, likes_end
+                  FROM sessions`;
+    const sessions = rid
+      ? db.prepare(`${base} WHERE web_rid=? ORDER BY started_at DESC LIMIT ? OFFSET ?`).all(rid, limit, offset)
+      : db.prepare(`${base} ORDER BY started_at DESC LIMIT ? OFFSET ?`).all(limit, offset);
+    const total = rid
+      ? (db.prepare("SELECT COUNT(*) AS c FROM sessions WHERE web_rid=?").get(rid) as { c: number }).c
+      : (db.prepare("SELECT COUNT(*) AS c FROM sessions").get() as { c: number }).c;
+    return c.json({ ok: true, total, sessions });
+  });
+
+  api.get("/history/session/:sid", (c) => {
+    const sid = Number(c.req.param("sid"));
+    const session = db.prepare("SELECT * FROM sessions WHERE id=?").get(sid) as
+      | Record<string, unknown>
+      | undefined;
+    if (!session) return c.json({ ok: false, error: "not found" }, 404);
+
+    const ranks: Record<string, { ts: number | null; rows: unknown[] }> = {};
+    for (const kind of ["contribution", "audience", "fans"]) {
+      const ts = (
+        db
+          .prepare("SELECT MAX(ts) AS ts FROM rank_snapshots WHERE session_id=? AND kind=?")
+          .get(sid, kind) as { ts: number | null }
+      ).ts;
+      ranks[kind] = {
+        ts: ts ?? null,
+        rows: ts
+          ? db
+              .prepare(
+                `SELECT rank, nickname, score, level, payload FROM rank_snapshots
+                 WHERE session_id=? AND kind=? AND ts=? ORDER BY rank`
+              )
+              .all(sid, kind, ts)
+          : [],
+      };
+    }
+
+    const fansRow = db
+      .prepare(
+        `SELECT ts, club_name, fans_name, active, total, today_new, guard, members
+         FROM fans_snapshots WHERE session_id=? ORDER BY ts DESC LIMIT 1`
+      )
+      .get(sid) as Record<string, unknown> | undefined;
+    let fans: Record<string, unknown> | null = null;
+    if (fansRow) {
+      let members: unknown[] = [];
+      try {
+        members = JSON.parse(String(fansRow.members ?? "[]")) as unknown[];
+      } catch {
+        members = [];
+      }
+      fans = { ...fansRow, guard: Boolean(fansRow.guard), members };
+    }
+
+    const giftTop = db
+      .prepare(
+        `SELECT nickname, SUM(diamonds) AS d, SUM(repeat) AS c FROM events
+         WHERE session_id=? AND type='Gift' AND nickname<>''
+         GROUP BY nickname ORDER BY d DESC LIMIT 10`
+      )
+      .all(sid);
+    const counts = db
+      .prepare("SELECT type, COUNT(*) AS n FROM events WHERE session_id=? GROUP BY type")
+      .all(sid) as { type: string; n: number }[];
+    const series = (
+      db
+        .prepare(
+          "SELECT ts, viewers, like_count FROM snapshots WHERE session_id=? ORDER BY ts DESC LIMIT 240"
+        )
+        .all(sid) as { ts: number; viewers: number; like_count: number }[]
+    ).reverse();
+    const giftNames = db
+      .prepare(
+        `SELECT gift_name, COUNT(*) AS n, SUM(diamonds) AS d FROM events
+         WHERE session_id=? AND type='Gift' GROUP BY gift_name ORDER BY n DESC LIMIT 12`
+      )
+      .all(sid);
+
+    return c.json({
+      ok: true,
+      session,
+      ranks,
+      fans,
+      gift_top: giftTop,
+      gift_names: giftNames,
+      event_counts: Object.fromEntries(counts.map((r) => [r.type, r.n])),
+      series,
+    });
+  });
+
+  api.get("/history/session/:sid/events", (c) => {
+    const sid = Number(c.req.param("sid"));
+    const limit = Math.min(Number(c.req.query("limit") ?? 200) || 200, 500);
+    const offset = Number(c.req.query("offset") ?? 0) || 0;
+    const type = c.req.query("type") ?? "";
+    const q = c.req.query("q") ?? "";
+    let where = "WHERE session_id=?";
+    const args: unknown[] = [sid];
+    if (type) {
+      where += " AND type=?";
+      args.push(type);
+    }
+    if (q) {
+      where += " AND (nickname LIKE ? OR content LIKE ? OR gift_name LIKE ?)";
+      args.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    }
+    const base = `SELECT ts, type, nickname, content, gift_name, repeat, diamonds FROM events ${where}`;
+    const total = (db.prepare(`SELECT COUNT(*) AS c FROM (${base})`).get(...args) as { c: number }).c;
+    const events = db
+      .prepare(`${base} ORDER BY ts DESC LIMIT ? OFFSET ?`)
+      .all(...args, limit, offset);
+    return c.json({ ok: true, total, events });
   });
 
   api.get("/notifications", (c) => {

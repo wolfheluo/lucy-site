@@ -106,6 +106,36 @@ export interface ReplayPayload {
   gifts: { total_diamonds: number; events: number; top: { nickname: string; diamonds: number; count: number }[] };
 }
 
+export interface HistorySessionRow {
+  id: number;
+  web_rid: string;
+  source: string;
+  anchor_name: string | null;
+  title: string | null;
+  started_at: number;
+  ended_at: number | null;
+  partial: number;
+  gift_diamonds: number;
+  gift_events: number;
+  chat_count: number;
+  member_count: number;
+  peak_viewers: number;
+  avg_viewers: number;
+  total_user: string | null;
+  likes_start: number;
+  likes_end: number;
+}
+
+export interface HistoryEventRow {
+  ts: number;
+  type: string;
+  nickname: string | null;
+  content: string | null;
+  gift_name: string | null;
+  repeat: number | null;
+  diamonds: number | null;
+}
+
 export const dyApi = {
   me: () =>
     fetch("/api/auth/me", { credentials: "include" })
@@ -133,4 +163,26 @@ export const dyApi = {
   notifications: (limit = 8) => req<{ notifications: NotificationRow[] }>(`/notifications?limit=${limit}`),
   testPush: () => req<{ ok: boolean; error?: string }>("/notify/test", { method: "POST" }),
   health: () => req<Record<string, unknown>>("/health"),
+  historySessions: (limit = 50, offset = 0) =>
+    req<{ total: number; sessions: HistorySessionRow[] }>(
+      `/history/sessions?limit=${limit}&offset=${offset}`
+    ),
+  historySession: (sid: number) =>
+    req<{
+      session: Record<string, unknown>;
+      ranks: Record<string, { ts: number | null; rows: Record<string, unknown>[] }>;
+      fans: Record<string, unknown> | null;
+      gift_top: { nickname: string; d: number; c: number }[];
+      gift_names: { gift_name: string; n: number; d: number }[];
+      event_counts: Record<string, number>;
+      series: { ts: number; viewers: number; like_count: number }[];
+    }>(`/history/session/${sid}`),
+  historyEvents: (sid: number, opts: { type?: string; q?: string; limit?: number; offset?: number } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.type) p.set("type", opts.type);
+    if (opts.q) p.set("q", opts.q);
+    p.set("limit", String(opts.limit ?? 100));
+    p.set("offset", String(opts.offset ?? 0));
+    return req<{ total: number; events: HistoryEventRow[] }>(`/history/session/${sid}/events?${p}`);
+  },
 };

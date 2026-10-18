@@ -280,6 +280,75 @@ describe("離線回放", () => {
   });
 });
 
+describe("歷史場次（P3）", () => {
+  it("場次列表回傳 total 與彙總欄位", async () => {
+    const cookie = await login();
+    const res = await app.request("/api/tools/dy-monitor/history/sessions", { headers: auth(cookie) });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      total: number;
+      sessions: { id: number; chat_count: number; gift_diamonds: number }[];
+    };
+    expect(json.total).toBe(1);
+    expect(json.sessions[0]).toMatchObject({ id: sessionId, chat_count: 1, gift_diamonds: 20 });
+  });
+
+  it("單場詳情含 ranks / gift_top / event_counts / series", async () => {
+    const cookie = await login();
+    const res = await app.request(`/api/tools/dy-monitor/history/session/${sessionId}`, {
+      headers: auth(cookie),
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      session: { id: number };
+      ranks: Record<string, { ts: number | null; rows: unknown[] }>;
+      gift_top: { nickname: string; d: number; c: number }[];
+      gift_names: { gift_name: string; n: number }[];
+      event_counts: Record<string, number>;
+      series: { viewers: number; like_count: number }[];
+    };
+    expect(json.session.id).toBe(sessionId);
+    expect(json.event_counts).toEqual({ Chat: 1, Gift: 1 });
+    expect(json.gift_top[0]).toMatchObject({ nickname: "大哥", d: 20 });
+    expect(json.gift_names[0]).toMatchObject({ gift_name: "玫瑰", n: 1 });
+    expect(json.series).toHaveLength(1);
+    expect(json.series[0]).toMatchObject({ viewers: 12000, like_count: 1000 });
+    expect(json.ranks.audience).toMatchObject({ ts: null, rows: [] }); // 本場未收錄榜單
+  });
+
+  it("事件分頁 / 型別篩選 / 關鍵字搜尋", async () => {
+    const cookie = await login();
+    const all = await app.request(`/api/tools/dy-monitor/history/session/${sessionId}/events`, {
+      headers: auth(cookie),
+    });
+    const allJson = (await all.json()) as { total: number; events: { type: string }[] };
+    expect(allJson.total).toBe(2);
+
+    const gifts = await app.request(
+      `/api/tools/dy-monitor/history/session/${sessionId}/events?type=Gift`,
+      { headers: auth(cookie) }
+    );
+    const giftJson = (await gifts.json()) as { total: number; events: { type: string }[] };
+    expect(giftJson.total).toBe(1);
+    expect(giftJson.events[0]!.type).toBe("Gift");
+
+    const search = await app.request(
+      `/api/tools/dy-monitor/history/session/${sessionId}/events?q=hi`,
+      { headers: auth(cookie) }
+    );
+    const searchJson = (await search.json()) as { total: number };
+    expect(searchJson.total).toBe(1);
+  });
+
+  it("不存在的場次 → 404", async () => {
+    const cookie = await login();
+    const res = await app.request("/api/tools/dy-monitor/history/session/999999", {
+      headers: auth(cookie),
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("通知端點", () => {
   it("未設定 LINE 時測試推播回 ok:false 並留下紀錄", async () => {
     const cookie = await login();

@@ -606,3 +606,109 @@
     transition: none;
   }
 }
+
+/* ── 歷史場次（P3）──────────────────────────────────────────── */
+.dym-h-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+.dym-h-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.dym-h-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(8, 10, 16, 0.96);
+  text-align: left;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint, #5c6b78);
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+.dym-h-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+}
+.dym-h-table tbody tr {
+  cursor: pointer;
+  transition: background 0.14s;
+}
+.dym-h-table tbody tr:hover {
+  background: rgba(168, 230, 255, 0.07);
+}
+.dym-h-events tbody tr {
+  cursor: default;
+}
+.dym-h-events td:nth-child(4) {
+  white-space: normal;
+  max-width: 420px;
+  word-break: break-word;
+}
+.dym-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+}
+.dym-search {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+.dym-search .dym-input {
+  width: 170px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.dym-grid-history {
+  grid-template-columns: 1.5fr 1fr 1fr;
+  grid-template-areas:
+    "chart chart chart"
+    "gifts audience fans"
+    "giftnames giftnames giftnames";
+}
+.dym-grid-history > .dym-panel:nth-child(2) {
+  grid-area: gifts;
+}
+.dym-grid-history > .dym-panel:nth-child(3) {
+  grid-area: audience;
+}
+.dym-grid-history > .dym-panel:nth-child(4) {
+  grid-area: fans;
+}
+.dym-grid-history > .dym-panel:nth-child(5) {
+  grid-area: giftnames;
+}
+.dym-rank-gift {
+  grid-template-columns: minmax(80px, 1fr) auto auto;
+}
+@media (max-width: 1200px) {
+  .dym-grid-history {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "chart chart"
+      "gifts audience"
+      "fans giftnames";
+  }
+}
+@media (max-width: 900px) {
+  .dym-grid-history {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "chart"
+      "gifts"
+      "audience"
+      "fans"
+      "giftnames";
+  }
+}
