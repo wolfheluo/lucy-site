@@ -41,6 +41,8 @@ export interface DyMessage {
   repeat: number;
   gift_name: string;
   msg_id: string;
+  /** 禮物事件的鑽石總值（由目錄價 × repeat 換算；僅 Gift 有） */
+  diamonds?: number;
   /** epoch 秒 */
   ts: number;
 }

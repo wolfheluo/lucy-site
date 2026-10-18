@@ -13,12 +13,12 @@ import type { Db } from "../../../server/db.js";
 import { applySchema } from "./schema.js";
 import {
   CAPTURE_KEYS,
+  type RankMember,
   type CaptureFlags,
   type FansMeta,
   type FansMember,
   type GiftCatalogEntry,
   type NotificationRow,
-  type RankMember,
   type RoomSnapshot,
   type SessionRow,
   type SessionSummary,
@@ -52,7 +52,7 @@ export class DyMonitorStore {
 
   private readonly flushSecs: number;
   private readonly maxBytes: number;
-  private readonly liveTolerance: number;
+  readonly liveTolerance: number;
   private readonly log: (message: string) => void;
   private readonly now: () => number;
 
@@ -323,6 +323,13 @@ export class DyMonitorStore {
       | undefined;
   }
 
+  /** 某房最近一場（下播小結用；不分 source） */
+  latestSession(webRid: string): SessionRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM sessions WHERE web_rid=? ORDER BY started_at DESC LIMIT 1")
+      .get(webRid) as SessionRow | undefined;
+  }
+
   // ---------- 寫入 API ----------
   addEvent(sid: number, ev: Record<string, unknown>): void {
     this.put({
@@ -351,7 +358,12 @@ export class DyMonitorStore {
     });
   }
 
-  addRank(sid: number, kind: string, rows: RankMember[], ts?: number): void {
+  addRank(
+    sid: number,
+    kind: string,
+    rows: ReadonlyArray<Partial<RankMember> & { count?: number }>,
+    ts?: number
+  ): void {
     const at = ts ?? this.now();
     for (const r of rows || []) {
       this.put({
