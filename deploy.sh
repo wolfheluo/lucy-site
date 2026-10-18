@@ -58,6 +58,14 @@ curl -sf -c lc.txt -X POST -H "Content-Type: application/json" -H "x-forwarded-f
   -d "{\"password\":\"$SMOKE_PASSWORD\"}" "$B/api/auth/login" -o /dev/null || { echo "login 失敗"; exit 1; }
 echo "  ok login"
 
+# ── dy-monitor（P1：登入牆 + 引擎在跑 + DB 有開）──
+CODE_ANON=$(curl -s -o /dev/null -w '%{http_code}' "$B/api/tools/dy-monitor/health")
+[ "$CODE_ANON" = "401" ] || { echo "dy-monitor 未登入竟回 $CODE_ANON（應為 401）"; exit 1; }
+DYH=$(curl -sf -b lc.txt -H "x-forwarded-for: $IP" "$B/api/tools/dy-monitor/health") \
+  || { echo "dy-monitor health 失敗"; exit 1; }
+echo "$DYH" | grep -q '"ok":true' || { echo "dy-monitor health 非 ok：$DYH"; exit 1; }
+echo "  ok dy-monitor（未登入 401 / health 200）"
+
 echo "smoke $(date +%s)" > smoke.txt
 FID=$(curl -sf -b lc.txt -H "x-forwarded-for: $IP" -F "file=@smoke.txt" \
   "$B/api/tools/file-vault/upload" | grep -oP '"id":"\K[a-f0-9-]{36}' | head -1)
