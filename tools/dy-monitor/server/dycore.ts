@@ -279,7 +279,7 @@ export class DyClient {
   }
 
   // ---------- 4) 粉絲團親密度榜（免簽名）----------
-  async fansClubRank(anchorId: string, count = 20): Promise<FansRank> {
+  async fansClubRank(anchorId: string, count = 100): Promise<FansRank> {
     const params: Record<string, string> = {
       ...COMMON_PARAMS,
       anchor_id: anchorId,
@@ -313,7 +313,7 @@ export class DyClient {
       fans_name: String(ci.fans_name || ""),
       active: Number(ci.active_fans_count ?? 0),
       total: Number(ci.total_fans_count ?? 0),
-      members: members.slice(0, 10),
+      members: members.slice(0, 50),
     };
   }
 

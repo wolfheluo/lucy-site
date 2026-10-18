@@ -211,7 +211,7 @@ export default function DySessionPage() {
                         <span>今日 +{num(Number(detail.fans.today_new))}</span>
                       </div>
                       {((detail.fans.members ?? []) as { nickname: string; intimacy: number; level: number }[])
-                        .slice(0, 10)
+                        .slice(0, 50)
                         .map((m, i) => (
                           <div key={i} className="dym-rank-row">
                             <span className="dym-rank-idx">{i + 1}</span>

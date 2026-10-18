@@ -827,7 +827,7 @@ export default function DyMonitorPage() {
                     </td>
                   </tr>
                 ) : (
-                  (fans?.members ?? []).slice(0, 10).map((m, i) => (
+                  (fans?.members ?? []).slice(0, 50).map((m, i) => (
                     <tr key={`${m.nickname}-${i}`}>
                       <td>{i + 1}</td>
                       <td>{m.nickname}</td>
