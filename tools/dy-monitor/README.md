@@ -155,3 +155,27 @@ DY_CLI_PASSWORD=<password> node scripts/dy-cli.mjs events <session_id> --type Gi
   preference for monitoring data.
 * The upstream endpoints are undocumented and may change without notice. A change to the
   `im/fetch` protobuf layout would require updating `server/parser.ts` and its fixtures.
+
+## 8. Dashboard Presentation
+
+The dashboard reproduces the layout and palette of the original Flask dashboard rather than the
+site-wide design tokens, so both implementations remain visually comparable during migration.
+
+* Palette (scoped to `.dym`): cyan `#00e5ff` for structure and values, magenta `#ff2d78` for
+  non-live state, lime `#9cff4d` for live state, amber `#ffc223` for ranking accents, on
+  `#05080d` with `rgba(10, 18, 28, 0.82)` panels and 10px radii.
+* Grid: a top bar (room URL, status pill, history link, monitor drawer) over six information
+  cards (status, viewers, likes, total visitors, gift value, anchor), a 3x2 main area, and a
+  footer. The main area places the viewer chart and audience ranking in the first column, the
+  chat stream in the second column spanning both rows, and the fan-club intimacy and gifting
+  rankings in the third column.
+* The page is height-locked above 981px through `LOCKED_TOOLS` in `src/components/ToolShell.tsx`;
+  below 1181px the panels stack into a single column that scrolls inside the tool body.
+* Charts scale to the observed value range rather than to zero, so a nearly flat viewer count
+  still resolves into a readable curve.
+* Tables use `table-layout: fixed` with fixed-width numeric columns; without it, five-digit gift
+  totals wrap and break row alignment.
+
+`scripts/dy-layout-check.mjs` measures the layout at 1440x900, 1180x800 and 390x844 and fails on
+console errors. Set `DY_COOKIE` to reuse an existing session instead of logging in again; the
+login endpoint is rate limited to five attempts per fifteen minutes per client address.
