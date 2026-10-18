@@ -636,6 +636,9 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   white-space: nowrap;
 }
+.dym-h-table .dym-badge {
+  margin-left: 6px;
+}
 .dym-h-table tbody tr {
   cursor: pointer;
   transition: background 0.14s;

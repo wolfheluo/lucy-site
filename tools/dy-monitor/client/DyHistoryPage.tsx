@@ -86,6 +86,10 @@ export default function DyHistoryPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    document.title = "DOUYIN MONITOR // 歷史場次";
+  }, []);
+
   return (
     <ToolFrame title="DOUYIN MONITOR" zh="抖音直播監控台 // 歷史場次">
       <div className="dym">

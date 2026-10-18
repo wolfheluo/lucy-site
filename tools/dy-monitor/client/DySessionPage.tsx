@@ -94,6 +94,10 @@ export default function DySessionPage() {
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    document.title = `DOUYIN MONITOR // 場次 #${sid}`;
+  }, [sid]);
   useEffect(() => {
     void loadEvents();
   }, [loadEvents]);
