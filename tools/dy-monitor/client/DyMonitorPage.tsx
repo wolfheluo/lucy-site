@@ -389,7 +389,8 @@ export default function DyMonitorPage() {
   const [replayAt, setReplayAt] = useState(0);
 
   const cursor = useRef(0);
-  const likesRef = useRef<{ last: number | null; delta: number }>({ last: null, delta: 0 });
+  const lastLikes = useRef<number | null>(null);
+  const [likeDelta, setLikeDelta] = useState(0);
   const chatBox = useRef<HTMLDivElement | null>(null);
   const stickBottom = useRef(true);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,7 +434,8 @@ export default function DyMonitorPage() {
   // 選中房切換 → 重置游標與彈幕
   useEffect(() => {
     cursor.current = 0;
-    likesRef.current = { last: null, delta: 0 };
+    lastLikes.current = null;
+    setLikeDelta(0);
     setChat([]);
     setReplay(null);
     setReplayAt(0);
@@ -449,6 +451,12 @@ export default function DyMonitorPage() {
         if (!alive) return;
         cursor.current = s.chat_cursor;
         setState(s);
+        const lc = Number(s.room?.like_count ?? 0);
+        if (lastLikes.current !== null && lc > lastLikes.current) {
+          const diff = lc - lastLikes.current;
+          setLikeDelta((prev) => prev + diff);
+        }
+        lastLikes.current = lc;
         if (s.chat.length > 0) {
           setChat((prev) => {
             const next = [...prev, ...(s.chat as unknown as ChatItem[])];
@@ -557,16 +565,6 @@ export default function DyMonitorPage() {
       : String(room.status_text ?? "未知");
   const statusLive = !isReplay && Number(room.status) === 2;
 
-  // 點讚增量（本次監控累計，對照原版 likedelta）
-  const likeCount = Number(room.like_count ?? 0);
-  if (!isReplay) {
-    if (likesRef.current.last !== null) {
-      const d = likeCount - likesRef.current.last;
-      if (d > 0) likesRef.current.delta += d;
-    }
-    likesRef.current.last = likeCount;
-  }
-
   const chatView = chat.filter((m) => {
     if (filter === "all") return true;
     if (filter === "Gift") return m.type === "Gift" && !isMutedGift(m);
@@ -647,7 +645,7 @@ export default function DyMonitorPage() {
           <small className="sub">
             {isReplay
               ? `本場 +${fmt(Number(rp?.session.likes_end ?? 0) - Number(rp?.session.likes_start ?? 0))}`
-              : `本次監控 +${fmt(likesRef.current.delta)}`}
+              : `本次監控 +${fmt(likeDelta)}`}
           </small>
         </article>
         <article className="dym-card">
@@ -740,10 +738,12 @@ export default function DyMonitorPage() {
                 </button>
               ))}
             </div>
-            <span className="dym-hint">{chatCountText}</span>
-            <span className="dym-hint">
+          </div>
+          <div className="dym-chatmeta">
+            <span>{chatCountText}</span>
+            <span>
               {inter
-                ? `${fmt(inter.chat)} 則｜發言 ${fmt(inter.chat_users)} 人｜${inter.chat_per_min}/分｜進場 ${inter.member_per_min}/分｜讚 ${inter.likes_per_min}/分`
+                ? `發言 ${fmt(inter.chat_users)} 人｜${inter.chat_per_min}/分｜進場 ${inter.member_per_min}/分`
                 : "—"}
             </span>
           </div>

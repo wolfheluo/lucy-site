@@ -398,6 +398,30 @@
   box-shadow: 0 0 12px rgba(255, 194, 35, 0.35);
 }
 
+.dym-chatmeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 14px 6px;
+  border-bottom: 1px dashed rgba(0, 229, 255, 0.1);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dym-chatmeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dym-chatmeta span:first-child {
+  flex: 0 0 auto;
+}
+.dym-chatmeta span:last-child {
+  flex: 0 1 auto;
+  color: rgba(109, 135, 155, 0.85);
+}
+
 .dym-chat {
   flex: 1;
   min-height: 0;
@@ -479,7 +503,21 @@
 .dym-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12.5px;
+}
+.dym-table th:first-child,
+.dym-table td:first-child {
+  width: 34px;
+}
+.dym-table th.num,
+.dym-table td.num {
+  width: 86px;
+}
+.dym-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dym-table th {
   position: sticky;
