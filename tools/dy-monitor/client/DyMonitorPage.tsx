@@ -94,38 +94,61 @@ function LockPanel({ onUnlocked }: { onUnlocked: () => void }) {
   );
 }
 
-// ── 人數曲線（原版 viewBox 800×240）─────────────────────────
+// ── 人數曲線（原版 viewBox 800×240，含網格線與端點）────────────
 function Chart({ series }: { series: { ts: number; viewers: number }[] }) {
   const data = series.slice(-240);
   const W = 800;
   const H = 240;
+  const PAD = 14;
   const max = Math.max(1, ...data.map((d) => d.viewers));
-  const pts = data
-    .map((d, i) => {
-      const x = data.length <= 1 ? 0 : (i / (data.length - 1)) * W;
-      const y = H - (d.viewers / max) * (H - 16) - 8;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const area = pts ? `${pts} ${W},${H} 0,${H}` : "";
+  const scaleMax = max * 1.12; // 留 headroom，避免滿資料時線貼在頂端變成一塊
+  const xAt = (i: number) => (data.length <= 1 ? 0 : (i / (data.length - 1)) * W);
+  const yAt = (v: number) => H - PAD - (v / scaleMax) * (H - PAD * 2);
+  const pts = data.map((d, i) => `${xAt(i).toFixed(1)},${yAt(d.viewers).toFixed(1)}`).join(" ");
+  const area = pts ? `${pts} ${xAt(data.length - 1).toFixed(1)},${H} 0,${H}` : "";
+  const last = data[data.length - 1];
+  const clock = (t?: number) => {
+    if (!t) return "--:--";
+    const d = new Date(t * 1000);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  if (data.length < 2) {
+    return (
+      <div className="dym-chartwrap">
+        <div className="dym-empty">累積資料中…（首次快照約 3 秒）</div>
+      </div>
+    );
+  }
+
   return (
     <div className="dym-chartwrap">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="dym-svg">
         <defs>
           <linearGradient id="dymFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(0,229,255,0.28)" />
+            <stop offset="0%" stopColor="rgba(0,229,255,0.20)" />
             <stop offset="100%" stopColor="rgba(0,229,255,0)" />
           </linearGradient>
         </defs>
-        {data.length > 2 && <polygon points={area} fill="url(#dymFill)" />}
-        {pts && (
-          <polyline points={pts} fill="none" stroke="var(--cyan)" strokeWidth="2" strokeLinejoin="round" />
-        )}
+        <polygon points={area} fill="url(#dymFill)" />
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line
+            key={f}
+            x1="0"
+            x2={W}
+            y1={PAD + (H - PAD * 2) * f}
+            y2={PAD + (H - PAD * 2) * f}
+            stroke="rgba(0,229,255,0.08)"
+            strokeDasharray="4 8"
+          />
+        ))}
+        <polyline points={pts} fill="none" stroke="var(--cyan)" strokeWidth="2" strokeLinejoin="round" />
+        {last && <circle cx={xAt(data.length - 1)} cy={yAt(last.viewers)} r="3.2" fill="var(--cyan)" />}
       </svg>
       <div className="dym-chartaxis">
-        <span>{data.length ? fmtDate(data[0]!.ts).slice(-11) : "--:--"}</span>
+        <span>{clock(data[0]!.ts)}</span>
         <span>峰值 {fmt(max)}</span>
-        <span>{data.length ? fmtDate(data[data.length - 1]!.ts).slice(-11) : "--:--"}</span>
+        <span>{clock(last!.ts)}</span>
       </div>
     </div>
   );
