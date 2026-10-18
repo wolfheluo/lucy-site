@@ -5,7 +5,7 @@
 //  · 右上 粉絲團親密度 / 右下 貢獻榜（送禮・本場累計）
 //  資料：2 秒輪詢 /state（cursor 增量）；離線時抓 /replay（60 秒快取）
 // =====================================================================
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   ApiError,
@@ -178,6 +178,18 @@ function Drawer({
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [topPx, setTopPx] = useState(0);
+
+  /* 抽屜從頂欄（.dym-topbar）下方開始，不遮住品牌／切換監控／狀態列 */
+  useLayoutEffect(() => {
+    const sync = () => {
+      const tb = document.querySelector<HTMLElement>(".dym-topbar");
+      setTopPx(tb ? Math.round(tb.getBoundingClientRect().bottom + 8) : 0);
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [open]);
   const [notifs, setNotifs] = useState<
     { id: number; kind: string | null; ok: number; error: string | null; text: string | null; ts: number }[]
   >([]);
@@ -257,8 +269,17 @@ function Drawer({
 
   return (
     <>
-      <div className={`dym-mask${open ? " is-open" : ""}`} onClick={onClose} aria-hidden="true" />
-      <aside className={`dym-drawer${open ? " is-open" : ""}`} aria-hidden={!open}>
+      <div
+        className={`dym-mask${open ? " is-open" : ""}`}
+        style={{ top: topPx }}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside
+        className={`dym-drawer${open ? " is-open" : ""}`}
+        style={{ top: topPx }}
+        aria-hidden={!open}
+      >
         <div className="dym-drawer-head">
           <h2>監控清單 {targets.length}/{maxTargets}</h2>
           <button className="dym-x" type="button" onClick={onClose}>
@@ -266,11 +287,11 @@ function Drawer({
           </button>
         </div>
 
-        <form className="dym-roomform" onSubmit={add}>
+        <form className="dym-roomform dym-roomform--drawer" onSubmit={add}>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="貼上直播間網址，例如 https://live.douyin.com/123456789"
+            placeholder="貼上直播間網址（https://live.douyin.com/…）"
             spellCheck={false}
           />
           <button type="submit" disabled={busy}>
