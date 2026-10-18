@@ -126,7 +126,7 @@ function Chart({ series }: { series: { ts: number; viewers: number }[] }) {
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="dym-svg">
         <defs>
           <linearGradient id="dymFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgba(0,229,255,0.20)" />
+            <stop offset="0%" stopColor="rgba(0,229,255,0.14)" />
             <stop offset="100%" stopColor="rgba(0,229,255,0)" />
           </linearGradient>
         </defs>
