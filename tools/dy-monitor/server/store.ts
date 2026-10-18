@@ -317,6 +317,31 @@ export class DyMonitorStore {
     return this.refreshSummary(sid, finalSnap, true);
   }
 
+  /**
+   * 場次禮物彙總（重啟/續接場次時回填記憶體用）
+   * 只算 DB 已收錄的 Gift 事件，供引擎把 giftTotal / giftEvents / 貢獻榜接回本場基準
+   */
+  giftSummary(sid: number): {
+    total: number;
+    events: number;
+    top: { nickname: string; diamonds: number; count: number }[];
+  } {
+    const agg = this.db
+      .prepare(
+        `SELECT COALESCE(SUM(diamonds),0) AS total, COUNT(*) AS events
+         FROM events WHERE session_id=? AND type='Gift'`
+      )
+      .get(sid) as { total: number | null; events: number | null };
+    const top = this.db
+      .prepare(
+        `SELECT nickname, SUM(diamonds) AS diamonds, COUNT(*) AS count
+         FROM events WHERE session_id=? AND type='Gift' AND nickname<>''
+         GROUP BY nickname ORDER BY diamonds DESC`
+      )
+      .all(sid) as { nickname: string; diamonds: number; count: number }[];
+    return { total: agg.total || 0, events: agg.events || 0, top };
+  }
+
   getSession(sid: number): SessionRow | undefined {
     return this.db.prepare("SELECT * FROM sessions WHERE id=?").get(sid) as
       | SessionRow

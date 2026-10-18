@@ -371,6 +371,8 @@ export class DyEngine {
         if (id !== this.sid) {
           this.sid = id;
           this.log(`[dy] ${resumed ? "續接" : "新開"}場次 #${id}（${snap.web_rid}）`);
+          // 續接同一場：先把 DB 已收錄的禮物接回記憶體，避免重啟後面板從 0 起算
+          if (resumed) this.hydrateGifts(id);
         }
         if (now - this.lastTouch > this.intervals.touch) {
           this.store.touchSession(id, snap);
@@ -447,6 +449,22 @@ export class DyEngine {
     } catch (err) {
       this.fansOk = false;
       this.err(`親密度榜失敗：${(err as Error).name}`);
+    }
+  }
+
+  /** 續接既有場次時，把 DB 已收錄的禮物接回記憶體（重啟後面板與複盤才會一致） */
+  private hydrateGifts(sid: number): void {
+    try {
+      const g = this.store.giftSummary(sid);
+      if (!g.events) return;
+      this.gifters = new Map(g.top.map((r) => [r.nickname, { diamonds: r.diamonds, count: r.count }]));
+      this.giftTotal = g.total;
+      this.giftEvents = g.events;
+      this.log(
+        `[dy] 場次 #${sid} 禮物回填：${g.events} 次 / ${g.total} 鑽 / ${g.top.length} 人`
+      );
+    } catch (err) {
+      this.err(`禮物回填失敗：${(err as Error).message}`);
     }
   }
 
