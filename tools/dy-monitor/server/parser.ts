@@ -77,6 +77,92 @@ const KEEP_METHODS = new Set([
 ]);
 
 /** 各訊息型別的 user 區塊欄位號（Chat/Member=2、Gift=7、Like=5） */
+/** protobuf varint（BigInt）：抖音 uid 可達 19 位，超過 Number.MAX_SAFE_INTEGER */
+export function readVarintBig(buf: Buffer, start: number): [bigint, number] {
+  let result = 0n;
+  let shift = 0n;
+  let i = start;
+  for (;;) {
+    if (i >= buf.length) throw new RangeError("varint out of range");
+    const byte = buf[i++]!;
+    result += BigInt(byte % 128) * 2n ** shift;
+    shift += 7n;
+    if (byte < 128) return [result, i];
+  }
+}
+
+/** 從 user 區塊取 (uid, 抖音號, sec_uid)；uid=f1 varint、抖音號=f38、sec_uid 以 MS4wLjAB 開頭 */
+export function parseUserIds(blob: Buffer, depth = 0): { uid: string; displayId: string; secUid: string } {
+  let uid = 0n;
+  let displayId = "";
+  let secUid = "";
+  const nested: Buffer[] = [];
+  let i = 0;
+  while (i < blob.length) {
+    let key: number;
+    try {
+      [key, i] = readVarint(blob, i);
+    } catch {
+      break;
+    }
+    const fn = Math.floor(key / 8);
+    const wt = key % 8;
+    if (wt === 0) {
+      try {
+        if (fn === 1 && uid === 0n) {
+          const [v, next] = readVarintBig(blob, i);
+          uid = v;
+          i = next;
+        } else {
+          const [, next] = readVarint(blob, i);
+          i = next;
+        }
+      } catch {
+        break;
+      }
+    } else if (wt === 2) {
+      try {
+        const [len, next] = readVarint(blob, i);
+        const slice = blob.subarray(next, next + len);
+        if (fn === 38 && !displayId) {
+          const t = slice.toString("utf8");
+          if (t && t.length <= 60 && !t.includes("\u0000")) displayId = t;
+        } else {
+          nested.push(slice);
+        }
+        i = next + len;
+      } catch {
+        break;
+      }
+    } else if (wt === 5) {
+      i += 4;
+    } else if (wt === 1) {
+      i += 8;
+    } else {
+      break;
+    }
+  }
+  for (const b of nested) {
+    const t = b.toString("utf8");
+    if (t.startsWith("MS4wLjAB") && t.length < 200) {
+      secUid = t;
+      break;
+    }
+  }
+  if (!secUid && depth < 2) {
+    for (const b of nested) {
+      const r = parseUserIds(b, depth + 1);
+      if (uid === 0n && r.uid) uid = BigInt(r.uid);
+      if (!displayId && r.displayId) displayId = r.displayId;
+      if (r.secUid) {
+        secUid = r.secUid;
+        break;
+      }
+    }
+  }
+  return { uid: uid ? uid.toString() : "", displayId, secUid };
+}
+
 const USER_FIELD: Record<string, number> = {
   WebcastChatMessage: 2,
   WebcastMemberMessage: 2,
@@ -176,6 +262,7 @@ export function decodeIm(
     }
 
     let nick = "";
+    let userBlob: Buffer | null = null;
     const wantUser = USER_FIELD[method];
     if (wantUser !== undefined) {
       for (const n of nested) {
@@ -183,6 +270,7 @@ export function decodeIm(
         const cand = nickFrom(n.buf);
         if (cand) {
           nick = cand;
+          userBlob = n.buf;
           break;
         }
       }
@@ -196,14 +284,19 @@ export function decodeIm(
         const len = charLength(cand);
         if (len >= 1 && len <= 30) {
           nick = cand;
+          userBlob = n.buf;
           break;
         }
       }
     }
 
+    const ids = userBlob ? parseUserIds(userBlob) : { uid: "", displayId: "", secUid: "" };
     messages.push({
       type: method.replace("Webcast", "").replace("Message", ""),
       nickname: nick,
+      user_id: ids.uid,
+      display_id: ids.displayId,
+      sec_uid: ids.secUid,
       content,
       gift_id: giftId,
       repeat,

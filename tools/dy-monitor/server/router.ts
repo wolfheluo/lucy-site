@@ -290,6 +290,82 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
   });
 
   // ---------- 歷史場次（P3）----------
+  // ---------- 本場出現的人（uid / 抖音號 / 神秘人）----------
+  api.get("/people", (c) => {
+    const rid = c.req.query("rid") || engine.selectedRid;
+    const limit = Math.min(Number(c.req.query("limit") ?? 800) || 800, 2000);
+    const onlyMystery = ["1", "true", "yes"].includes(String(c.req.query("mystery") ?? "").toLowerCase());
+    const q = String(c.req.query("q") ?? "").trim().toLowerCase();
+
+    const session = db
+      .prepare("SELECT id, anchor_name, title, started_at, ended_at FROM sessions WHERE web_rid=? ORDER BY started_at DESC LIMIT 1")
+      .get(rid) as { id: number; anchor_name?: string; title?: string; started_at?: number; ended_at?: number } | undefined;
+    if (!session) return c.json({ ok: false, error: "no_session", web_rid: rid });
+
+    const rows = db
+      .prepare(
+        `SELECT type, nickname, user_id, extra, ts, COALESCE(diamonds,0) AS d
+         FROM events WHERE session_id=? AND user_id IS NOT NULL AND user_id<>''`
+      )
+      .all(session.id) as { type: string; nickname: string | null; user_id: string; extra: string | null; ts: number; d: number }[];
+
+    type Agg = {
+      uid: string; nickname: string; display_id: string; sec_uid: string;
+      types: Set<string>; first: number; last: number; count: number; diamonds: number;
+    };
+    const agg = new Map<string, Agg>();
+    for (const r of rows) {
+      let display = "";
+      let sec = "";
+      if (r.extra) {
+        try {
+          const ex = JSON.parse(r.extra) as { display_id?: string; sec_uid?: string };
+          display = ex.display_id || "";
+          sec = ex.sec_uid || "";
+        } catch {
+          /* ignore */
+        }
+      }
+      const a = agg.get(r.user_id) ?? {
+        uid: r.user_id, nickname: r.nickname || "", display_id: display, sec_uid: sec,
+        types: new Set<string>(), first: r.ts, last: r.ts, count: 0, diamonds: 0,
+      };
+      if (!a.nickname && r.nickname) a.nickname = r.nickname;
+      if (!a.display_id && display) a.display_id = display;
+      if (!a.sec_uid && sec) a.sec_uid = sec;
+      a.types.add(r.type);
+      a.first = Math.min(a.first, r.ts);
+      a.last = Math.max(a.last, r.ts);
+      a.count += 1;
+      a.diamonds += r.d || 0;
+      agg.set(r.user_id, a);
+    }
+
+    const all = [...agg.values()].map((a) => ({
+      uid: a.uid, nickname: a.nickname, display_id: a.display_id, sec_uid: a.sec_uid,
+      types: [...a.types], first: a.first, last: a.last, count: a.count,
+      diamonds: a.diamonds, mystery: a.nickname.startsWith("神秘人"),
+    }));
+    const mysteryTotal = all.filter((p) => p.mystery).length;
+
+    const filtered = all.filter((p) => {
+      if (onlyMystery && !p.mystery) return false;
+      if (!q) return true;
+      return (
+        p.nickname.toLowerCase().includes(q) ||
+        p.uid.includes(q) ||
+        (p.display_id || "").toLowerCase().includes(q)
+      );
+    });
+    // 神秘人優先，其餘依最後出現時間
+    filtered.sort((a, b) => Number(b.mystery) - Number(a.mystery) || b.last - a.last);
+
+    return c.json({
+      ok: true, web_rid: rid, session, total: all.length, mystery_total: mysteryTotal,
+      shown: Math.min(filtered.length, limit), people: filtered.slice(0, limit),
+    });
+  });
+
   api.get("/history/sessions", (c) => {
     const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 200);
     const offset = Number(c.req.query("offset") ?? 0) || 0;

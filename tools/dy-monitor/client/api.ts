@@ -41,6 +41,29 @@ export class ApiError extends Error {
   }
 }
 
+export interface PeopleRow {
+  uid: string;
+  nickname: string;
+  display_id: string;
+  sec_uid: string;
+  types: string[];
+  first: number;
+  last: number;
+  count: number;
+  diamonds: number;
+  mystery: boolean;
+}
+
+export interface PeoplePayload {
+  ok: boolean;
+  web_rid: string;
+  session: { id: number; anchor_name?: string; title?: string; started_at?: number; ended_at?: number };
+  total: number;
+  mystery_total: number;
+  shown: number;
+  people: PeopleRow[];
+}
+
 export interface StatePayload {
   room: Partial<RoomSnapshot>;
   loading: boolean;
@@ -160,6 +183,13 @@ export const dyApi = {
   deleteTarget: (rid: string) => req<{ ok: boolean }>(`/targets/${rid}`, { method: "DELETE" }),
   selectTarget: (rid: string) => req<{ web_rid: string }>(`/targets/${rid}/select`, { method: "POST" }),
   replay: (rid: string) => req<ReplayPayload>(`/replay/${rid}`),
+  people: (opts: { limit?: number; mystery?: boolean; q?: string } = {}) => {
+    const p = new URLSearchParams();
+    p.set("limit", String(opts.limit ?? 800));
+    if (opts.mystery) p.set("mystery", "1");
+    if (opts.q) p.set("q", opts.q);
+    return req<PeoplePayload>(`/people?${p}`);
+  },
   notifications: (limit = 8) => req<{ notifications: NotificationRow[] }>(`/notifications?limit=${limit}`),
   testPush: () => req<{ ok: boolean; error?: string }>("/notify/test", { method: "POST" }),
   health: () => req<Record<string, unknown>>("/health"),

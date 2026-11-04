@@ -371,7 +371,9 @@ export class DyMonitorStore {
         ev.repeat ?? null,
         ev.diamonds ?? null,
         (ev.msg_id as string) || "",
-        null,
+        ev.display_id || ev.sec_uid
+          ? JSON.stringify({ display_id: (ev.display_id as string) || "", sec_uid: (ev.sec_uid as string) || "" })
+          : null,
       ],
     });
   }

@@ -27,6 +27,12 @@ export interface RoomSnapshot {
   cover: string;
   has_goods: boolean;
   auth: Record<string, unknown>;
+  /** 使用者 uid（進場/發言未遮蔽；神秘人的送禮訊息會被遮成 111111） */
+  user_id?: string;
+  /** 抖音號（unique_id / display_id） */
+  display_id?: string;
+  /** sec_uid（MS4wLjAB… 開頭，可拼出個人主頁網址） */
+  sec_uid?: string;
   /** epoch 秒 */
   ts: number;
 }
@@ -43,6 +49,12 @@ export interface DyMessage {
   msg_id: string;
   /** 禮物事件的鑽石總值（由目錄價 × repeat 換算；僅 Gift 有） */
   diamonds?: number;
+  /** 使用者 uid（進場/發言未遮蔽；神秘人的送禮訊息會被遮成 111111） */
+  user_id?: string;
+  /** 抖音號（unique_id / display_id） */
+  display_id?: string;
+  /** sec_uid（MS4wLjAB… 開頭，可拼出個人主頁網址） */
+  sec_uid?: string;
   /** epoch 秒 */
   ts: number;
 }

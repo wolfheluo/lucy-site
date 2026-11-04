@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { decodeIm, readFields, readVarint } from "../tools/dy-monitor/server/parser.js";
+import { decodeIm, parseUserIds, readFields, readVarint } from "../tools/dy-monitor/server/parser.js";
 
 // ---------- 合成 protobuf 工具 ----------
 function varint(n: number): Buffer {
@@ -178,4 +178,60 @@ describe.skipIf(!hasFixtures)("decodeIm vs Python 真實封包", () => {
       expect(actual).toEqual(want);
     });
   }
+});
+
+// ---------- uid / 抖音號 / sec_uid（v5）----------
+function varintBig(n: bigint): Buffer {
+  const out: number[] = [];
+  let v = n;
+  while (v >= 128n) {
+    out.push(Number(v % 128n) | 0x80);
+    v /= 128n;
+  }
+  out.push(Number(v));
+  return Buffer.from(out);
+}
+function vintBig(fn: number, value: bigint): Buffer {
+  return Buffer.concat([varintBig(BigInt(fn * 8)), varintBig(value)]);
+}
+
+describe("parseUserIds / 帳號識別碼", () => {
+  const SEC = "MS4wLjABAAAA-326JCaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  it("19 位 uid 不因 Number 精度而失真", () => {
+    const blob = Buffer.concat([vintBig(1, 7704213494397195315n), ld(3, "神秘人五阶")]);
+    const ids = parseUserIds(blob);
+    expect(ids.uid).toBe("7704213494397195315");
+  });
+
+  it("解析抖音號(f38) 與 sec_uid", () => {
+    const blob = Buffer.concat([
+      vint(1, 12345),
+      ld(3, "神秘人二阶"),
+      ld(9, Buffer.concat([ld(1, "avatar")])),
+      ld(38, "xiaoqing1998520"),
+      ld(24, Buffer.concat([ld(2, SEC)])),
+    ]);
+    const ids = parseUserIds(blob);
+    expect(ids.uid).toBe("12345");
+    expect(ids.displayId).toBe("xiaoqing1998520");
+    expect(ids.secUid).toBe(SEC);
+  });
+
+  it("decodeIm 會把 uid／抖音號／sec_uid 帶進訊息", () => {
+    const user = Buffer.concat([
+      vintBig(1, 3651942287676042n),
+      ld(3, "神秘人五阶"),
+      ld(38, "32662562629"),
+      ld(24, Buffer.concat([ld(2, SEC)])),
+    ]);
+    const payload = Buffer.concat([ld(2, user), ld(3, "hi")]);
+    const body = imResponse([wrapMessage("WebcastChatMessage", payload, "m1")], "cur");
+    const { messages } = decodeIm(body);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.user_id).toBe("3651942287676042");
+    expect(messages[0]!.display_id).toBe("32662562629");
+    expect(messages[0]!.sec_uid).toBe(SEC);
+    expect(messages[0]!.nickname).toBe("神秘人五阶");
+  });
 });

@@ -11,6 +11,7 @@ import {
   ApiError,
   UnauthorizedError,
   dyApi,
+  type PeoplePayload,
   type ReplayPayload,
   type StatePayload,
   type TargetWithState,
@@ -399,6 +400,148 @@ function Drawer({
 }
 
 // ── 主頁面 ──────────────────────────────────────────────────
+
+/* ── 本場出現的人（uid／抖音號／神秘人）── */
+function PeopleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [data, setData] = useState<PeoplePayload | null>(null);
+  const [q, setQ] = useState("");
+  const [onlyMystery, setOnlyMystery] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      setData(await dyApi.people({ mystery: onlyMystery, q }));
+    } catch {
+      /* 401 由外層處理 */
+    } finally {
+      setBusy(false);
+    }
+  }, [onlyMystery, q]);
+
+  useEffect(() => {
+    if (!open) return;
+    void load();
+    const t = setInterval(() => void load(), 5000);
+    return () => clearInterval(t);
+  }, [open, load]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [open, onClose]);
+
+  if (!open) return null;
+  const rows = data?.people ?? [];
+  const typeLabel: Record<string, string> = { Chat: "發言", Member: "進場", Gift: "送禮", Like: "點讚" };
+
+  return (
+    <div
+      className="dym-people-mask"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="dym-people-card">
+        <header>
+          <h2>
+            本場出現的人{" "}
+            <span className="badge">
+              {(data?.total ?? 0).toLocaleString("zh-TW")} 人｜神秘人 {data?.mystery_total ?? 0}
+            </span>
+          </h2>
+          <div className="tools">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="搜暱稱 / 抖音號 / uid"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className={`dym-btn${onlyMystery ? " is-on" : ""}`}
+              onClick={() => setOnlyMystery((v) => !v)}
+            >
+              只看神秘人
+            </button>
+            <button type="button" className="dym-x" onClick={onClose}>
+              ✕
+            </button>
+          </div>
+        </header>
+        <p className="hint">
+          資料來自本場事件流（進場／發言／送禮），只涵蓋監控期間有動作的人；
+          <b>神秘人</b>在進場與發言訊息中會露出真實 uid／抖音號。
+        </p>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>暱稱</th>
+                <th>uid</th>
+                <th>抖音號</th>
+                <th>類型</th>
+                <th className="num">事件</th>
+                <th className="num">鑽石</th>
+                <th>最後出現</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="empty">
+                    {busy ? "載入中…" : "沒有符合條件的資料"}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((p, i) => (
+                  <tr key={p.uid} className={p.mystery ? "is-mystery" : ""}>
+                    <td>{i + 1}</td>
+                    <td className={p.mystery ? "mystery" : ""}>
+                      {p.nickname || "（無暱稱）"}
+                      {p.sec_uid && (
+                        <>
+                          {" "}
+                          <a
+                            href={`https://www.douyin.com/user/${p.sec_uid}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            ↗
+                          </a>
+                        </>
+                      )}
+                    </td>
+                    <td className="mono">{p.uid}</td>
+                    <td className="mono">{p.display_id || "—"}</td>
+                    <td>
+                      {(p.types ?? []).map((t) => (
+                        <span key={t} className={`ptag ${t}`}>
+                          {typeLabel[t] ?? t}
+                        </span>
+                      ))}
+                    </td>
+                    <td className="num">{p.count.toLocaleString("zh-TW")}</td>
+                    <td className="num">{p.diamonds ? p.diamonds.toLocaleString("zh-TW") : "—"}</td>
+                    <td className="mono">
+                      {new Date(p.last * 1000).toLocaleTimeString("zh-TW", { hour12: false })}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DyMonitorPage() {
   const [phase, setPhase] = useState<"checking" | "locked" | "open">("checking");
   const [state, setState] = useState<StatePayload | null>(null);
@@ -408,6 +551,7 @@ export default function DyMonitorPage() {
   const [chat, setChat] = useState<ChatItem[]>([]);
   const [filter, setFilter] = useState<ChatFilter>("all");
   const [drawer, setDrawer] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [roomUrl, setRoomUrl] = useState("");
   const [switching, setSwitching] = useState(false);
@@ -641,6 +785,9 @@ export default function DyMonitorPage() {
         <Link className="dym-btn" to="/tools/dy-monitor/history">
           場次複盤
         </Link>
+        <button className="dym-btn dym-people-btn" type="button" onClick={() => setPeopleOpen(true)}>
+          👥 現在的人
+        </button>
         <button className="dym-btn" type="button" onClick={() => setDrawer(true)}>
           ☰ 監控清單 <b>{targets.length}</b>
         </button>
@@ -901,6 +1048,8 @@ export default function DyMonitorPage() {
         </span>
         <Link to="/tools/dy-monitor/history">場次複盤 →</Link>
       </footer>
+
+      <PeopleModal open={peopleOpen} onClose={() => setPeopleOpen(false)} />
 
       <Drawer
         open={drawer}
