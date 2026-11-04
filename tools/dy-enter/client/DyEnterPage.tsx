@@ -1,7 +1,7 @@
 // =====================================================================
 //  DOUYIN ENTER LOG // 抖音進場名單
 //   · 頂部貼直播間 URL → 開始記錄（新場次）
-//   · 表格：每人一列（UID／抖音號／暱稱／標記／次數／最後進場）
+//   · 表格：每人一列（抖音ID／抖音暱稱／真實ID／標記／次數／最後進場）
 //   · 點列展開該人的進場明細
 //   · 篩選：全部 / 只看神秘人 / 只看疑似隱身
 //   · 3 秒輪詢 /state；名單 5 秒刷新
@@ -186,7 +186,7 @@ export default function DyEnterPage() {
   const lookup = async (uidArg?: string) => {
     const uid = (uidArg ?? lookupUid).trim();
     if (!/^\d{5,20}$/.test(uid)) {
-      setNotice("請輸入純數字的 UID");
+      setNotice("請輸入純數字的抖音ID");
       return;
     }
     setLooking(true);
@@ -194,8 +194,8 @@ export default function DyEnterPage() {
       const j = await enterApi.profile(uid, sessionId || undefined);
       setLookupHit(j.profile);
       setNotice(
-        `UID ${uid} → ${j.profile.nickname}` +
-          (j.profile.uniqueId ? `（抖音號 ${j.profile.uniqueId}）` : "") +
+        `抖音ID ${uid} → 真實ID ${j.profile.nickname}` +
+          (j.profile.uniqueId ? `（抖音暱稱 ${j.profile.uniqueId}）` : "") +
           `｜粉絲 ${j.profile.followers}`
       );
       if (sessionId) {
@@ -416,7 +416,7 @@ export default function DyEnterPage() {
           <input
             value={lookupUid}
             onChange={(e) => setLookupUid(e.target.value)}
-            placeholder="輸入 UID 反查暱稱"
+            placeholder="輸入抖音ID 反查真實ID"
             inputMode="numeric"
             onKeyDown={(e) => {
               if (e.key === "Enter") void lookup();
@@ -443,9 +443,9 @@ export default function DyEnterPage() {
             <tr>
               <th>#</th>
               <th>暱稱／標記</th>
-              <th>真實暱稱</th>
-              <th>UID</th>
-              <th>抖音號</th>
+              <th>真實ID</th>
+              <th>抖音ID</th>
+              <th>抖音暱稱</th>
               <th className="num">進場</th>
               <th className="num">發言</th>
               <th>首次進場</th>
@@ -509,7 +509,7 @@ export default function DyEnterPage() {
                             void lookup(r.uid);
                           }}
                           disabled={looking}
-                          title="用 UID 反查真實暱稱"
+                          title="用抖音ID 反查真實ID"
                         >
                           🔍 反查
                         </button>
