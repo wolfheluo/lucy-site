@@ -204,6 +204,8 @@ export class DyEnterStore {
       const alias = (msg.display_id ?? "").trim() || (msg.nickname ?? "").trim();
       if (!alias) return null;
       uid = `anon:${alias}`;
+      // 匿名訊息的假抖音號藏在暱稱/抖音號欄位，補進 display_id 讓 UI 看得到
+      if (!(msg.display_id ?? "").trim()) msg.display_id = alias;
     }
     if (!uid) return null;
     const ts = msg.ts || this.now();
@@ -256,12 +258,28 @@ export class DyEnterStore {
    * 大房間的 Member 事件是抽樣、多數人都不會有進場事件。
    */
   addChat(sessionId: number, msg: EnterMessage, countAsHidden = false): string | null {
-    const uid = this.upsert(sessionId, msg, "chat", countAsHidden ? 1 : 0);
+    // 匿名者本身已是獨立分類，不再重複標「疑似隱身」
+    const anon = (msg.user_id ?? "").trim() === "111111";
+    const uid = this.upsert(sessionId, msg, "chat", countAsHidden && !anon ? 1 : 0);
     if (!uid) return null;
     this.db
       .prepare("INSERT INTO messages(session_id, uid, ts, content) VALUES (?,?,?,?)")
       .run(sessionId, uid, msg.ts || this.now(), msg.content ?? "");
     return uid;
+  }
+
+  /** 最近一個還開著的場次（重啟後接回用） */
+  latestOpenSession(): SessionRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1")
+      .get() as SessionRow | undefined;
+  }
+
+  /** 最近一個場次（不論是否結案） */
+  latestSession(): SessionRow | undefined {
+    return this.db
+      .prepare("SELECT * FROM sessions ORDER BY started_at DESC LIMIT 1")
+      .get() as SessionRow | undefined;
   }
 
   /** 刪除整個場次（四張表一起清，單一交易） */

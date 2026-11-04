@@ -50,6 +50,8 @@ export class EnterEngine {
   viewers = 0;
   /** 本場是否「人數小到可以完整觀察進場事件」 */
   private roomObservable = false;
+  /** 重啟後待續錄的房間（沒有開啟中的場次時使用） */
+  private pendingResumeRid = "";
   /** 使用者手動停止：true 時不輪詢、不寫入（場次已結案） */
   paused = false;
   private cursor = "";
@@ -65,13 +67,27 @@ export class EnterEngine {
     // 重啟後沿用「已暫停」狀態（使用者按過停止 → 不要自己恢復記錄）
     if (this.store.getSetting("paused", "0") === "1") this.paused = true;
 
-    // 重啟後接回最後一場（若還沒結束）
+    // 重啟後接回：先看設定的場次，再看最近一個還開著的場次；
+    // 都沒有的話，只要不是暫停狀態、且有最後選過的房間 → 開場後自動續錄
     const saved = Number(this.store.getSetting("current_session_id", "0")) || 0;
-    if (saved) {
-      const row = this.store.session(saved);
-      if (row && row.ended_at === null) {
-        this.currentSessionId = row.id;
-        this.log(`[dy-enter] 續接場次 #${row.id}（${row.web_rid}）`);
+    const savedRow = saved ? this.store.session(saved) : undefined;
+    if (savedRow && savedRow.ended_at === null) {
+      this.currentSessionId = savedRow.id;
+      this.log(`[dy-enter] 續接場次 #${savedRow.id}（${savedRow.web_rid}）`);
+    } else {
+      const open = this.store.latestOpenSession();
+      if (open) {
+        this.currentSessionId = open.id;
+        this.store.setSetting("current_session_id", String(open.id));
+        this.log(`[dy-enter] 續接未結案場次 #${open.id}（${open.web_rid}）`);
+      } else {
+        const latest = this.store.latestSession();
+        const rid = this.store.getSetting("selected_web_rid", "");
+        if (latest && rid && latest.web_rid === rid) this.pendingResumeRid = rid;
+        else if (rid) this.pendingResumeRid = rid;
+        if (this.pendingResumeRid && !this.paused) {
+          this.log(`[dy-enter] 準備自動續錄 ${this.pendingResumeRid}`);
+        }
       }
     }
   }
@@ -144,6 +160,7 @@ export class EnterEngine {
     if (row.ended_at !== null) return this.selectRoom(row.web_rid); // 已結案 → 新場次
     this.currentSessionId = row.id;
     this.paused = false;
+    this.pendingResumeRid = "";
     this.store.setSetting("paused", "0");
     this.lastRoomCheck = 0; // 立刻校正狀態（不重設 cursor，避免重複計次）
     this.log(`[dy-enter] 場次 #${row.id} 繼續記錄`);
@@ -168,6 +185,7 @@ export class EnterEngine {
     this.snapshot = snap;
     this.live = snap.status === 2;
     this.paused = false;
+    this.pendingResumeRid = "";
     this.store.setSetting("paused", "0");
     this.cursor = ""; // 新場次從頭收
     this.lastRoomCheck = Date.now();
@@ -201,6 +219,16 @@ export class EnterEngine {
     if (this.busy) return;
     this.busy = true;
     try {
+      // 重啟後自動續錄：沒有當前場次但知道最後選過的房間
+      if (!this.currentSessionId && this.pendingResumeRid && !this.paused) {
+        const rid = this.pendingResumeRid;
+        this.pendingResumeRid = "";
+        const res = await this.selectRoom(rid);
+        if (!res.ok) {
+          this.lastError = `自動續錄失敗：${res.error ?? "unknown"}`;
+          this.log(`[dy-enter] 自動續錄 ${rid} 失敗：${res.error ?? "unknown"}`);
+        }
+      }
       const sid = this.currentSessionId;
       if (!sid || this.paused) return;
       const session = this.store.session(sid);
