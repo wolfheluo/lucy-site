@@ -185,8 +185,8 @@ export default function DyEnterPage() {
   /* ---------- UID 反查暱稱 ---------- */
   const lookup = async (uidArg?: string) => {
     const uid = (uidArg ?? lookupUid).trim();
-    if (!/^\d{5,20}$/.test(uid)) {
-      setNotice("請輸入純數字的抖音ID");
+    if (!uid) {
+      setNotice("請輸入抖音ID（數字或自訂ID，例如 wolfheluo）");
       return;
     }
     setLooking(true);
@@ -416,7 +416,7 @@ export default function DyEnterPage() {
           <input
             value={lookupUid}
             onChange={(e) => setLookupUid(e.target.value)}
-            placeholder="輸入抖音ID 反查真實ID"
+            placeholder="抖音ID（數字或 wolfheluo）"
             inputMode="numeric"
             onKeyDown={(e) => {
               if (e.key === "Enter") void lookup();
@@ -433,7 +433,8 @@ export default function DyEnterPage() {
           )}
         </span>
         <span className="dye-hint">
-          資料來源：進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看進場時間與發言原文
+          進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看明細 ·
+          隱身只在小房間（在線 ≤300）判定：大房間的進場事件是抽樣、不可信
         </span>
       </div>
 
@@ -478,7 +479,7 @@ export default function DyEnterPage() {
                       <span className="nick">{r.nickname || "（無暱稱）"}</span>
                       {r.mark === "mystery" && <span className="badge mystery">神秘人</span>}
                       {r.mark === "suspect_hidden" && <span className="badge suspect">疑似隱身</span>}
-                      {r.visits === 0 && r.chat_count > 0 && (
+                      {r.hidden_flag === 1 && (
                         <span className="badge hidden">疑似隱身（僅發言）</span>
                       )}
                       {r.sec_uid && (

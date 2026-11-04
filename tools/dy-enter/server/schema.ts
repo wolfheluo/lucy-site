@@ -12,6 +12,8 @@ export const DY_ENTER_MIGRATIONS = [
   "ALTER TABLE entrants ADD COLUMN real_short_id TEXT DEFAULT ''",
   "ALTER TABLE entrants ADD COLUMN resolved_at REAL",
   "ALTER TABLE entrants ADD COLUMN resolve_tries INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE entrants ADD COLUMN hidden_flag INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN current_viewers INTEGER NOT NULL DEFAULT 0",
 ];
 
 export const DY_ENTER_SCHEMA = `
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     title        TEXT,
     started_at   REAL NOT NULL,
     ended_at     REAL,
+    current_viewers INTEGER NOT NULL DEFAULT 0,
     last_seen_at REAL
 );
 
@@ -42,6 +45,7 @@ CREATE TABLE IF NOT EXISTS entrants (
     last_ts    REAL NOT NULL,
     visits     INTEGER NOT NULL DEFAULT 1,
     chat_count INTEGER NOT NULL DEFAULT 0,
+    hidden_flag    INTEGER NOT NULL DEFAULT 0,
     real_nickname  TEXT DEFAULT '',
     real_unique_id TEXT DEFAULT '',
     real_short_id  TEXT DEFAULT '',

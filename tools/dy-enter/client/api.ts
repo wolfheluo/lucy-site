@@ -26,6 +26,7 @@ export interface Entrant {
   last_ts: number;
   visits: number;
   chat_count: number;
+  hidden_flag?: number;
   real_nickname?: string | null;
   real_unique_id?: string | null;
   real_short_id?: string | null;

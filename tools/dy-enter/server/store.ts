@@ -29,6 +29,7 @@ export interface SessionRow {
   started_at: number;
   ended_at: number | null;
   last_seen_at: number | null;
+  current_viewers?: number;
 }
 
 export interface EnterMessage {
@@ -51,6 +52,7 @@ export interface EntrantRow {
   last_ts: number;
   visits: number;
   chat_count: number;
+  hidden_flag?: number;
   real_nickname?: string | null;
   real_unique_id?: string | null;
   real_short_id?: string | null;
@@ -64,6 +66,7 @@ export interface SnapshotLike {
   anchor_name?: string;
   title?: string;
   status?: number;
+  viewers?: number;
 }
 
 const TOLERANCE = 180; // 秒：同 room_id 且在 3 分鐘內再看到 → 續接同一場
@@ -145,15 +148,26 @@ export class DyEnterStore {
     return { session: this.session(Number(info.lastInsertRowid))!, created: true };
   }
 
-  touchSession(id: number, patch: Partial<Pick<SessionRow, "anchor_name" | "title" | "room_id">>): void {
+  touchSession(
+    id: number,
+    patch: Partial<Pick<SessionRow, "anchor_name" | "title" | "room_id">> & { viewers?: number }
+  ): void {
     this.db
       .prepare(
         `UPDATE sessions SET last_seen_at=?,
            anchor_name=COALESCE(?, anchor_name), title=COALESCE(?, title),
-           room_id=COALESCE(?, room_id)
+           room_id=COALESCE(?, room_id),
+           current_viewers=COALESCE(?, current_viewers)
          WHERE id=?`
       )
-      .run(this.now(), patch.anchor_name ?? null, patch.title ?? null, patch.room_id ?? null, id);
+      .run(
+        this.now(),
+        patch.anchor_name ?? null,
+        patch.title ?? null,
+        patch.room_id ?? null,
+        patch.viewers ?? null,
+        id
+      );
   }
 
   endSession(id: number): void {
@@ -174,7 +188,12 @@ export class DyEnterStore {
 
   // ---------- 進場 ----------
   /** 共用 upsert：進場（enter）與發言（chat）都會建立/更新同一個人 */
-  private upsert(sessionId: number, msg: EnterMessage, kind: "enter" | "chat"): string | null {
+  private upsert(
+    sessionId: number,
+    msg: EnterMessage,
+    kind: "enter" | "chat",
+    hiddenFlag = 0
+  ): string | null {
     const uid = (msg.user_id ?? "").trim();
     // 送禮訊息把匿名 uid 換成哨兵值 111111 → 無法識別，丟棄（由呼叫端計數）
     if (!uid || uid === "111111") return null;
@@ -184,10 +203,11 @@ export class DyEnterStore {
     this.db
       .prepare(
         `INSERT INTO entrants(session_id, uid, nickname, display_id, sec_uid, mark,
-                              first_ts, last_ts, visits, chat_count)
-         VALUES (?,?,?,?,?,?,?,?,?,?)
+                              first_ts, last_ts, visits, chat_count, hidden_flag)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(session_id, uid) DO UPDATE SET
            visits = entrants.visits + excluded.visits,
+           hidden_flag = MAX(entrants.hidden_flag, excluded.hidden_flag),
            chat_count = entrants.chat_count + excluded.chat_count,
            last_ts = excluded.last_ts,
            nickname = CASE WHEN excluded.nickname<>'' THEN excluded.nickname ELSE entrants.nickname END,
@@ -205,7 +225,8 @@ export class DyEnterStore {
         ts,
         ts,
         kind === "enter" ? 1 : 0,
-        kind === "chat" ? 1 : 0
+        kind === "chat" ? 1 : 0,
+        hiddenFlag
       );
     return uid;
   }
@@ -220,14 +241,31 @@ export class DyEnterStore {
     return uid;
   }
 
-  /** 寫入一次發言（entrants.chat_count + messages 一列；內容照存） */
-  addChat(sessionId: number, msg: EnterMessage): string | null {
-    const uid = this.upsert(sessionId, msg, "chat");
+  /**
+   * 寫入一次發言（entrants.chat_count + messages 一列；內容照存）
+   * countAsHidden=true 時標記「疑似隱身（僅發言）」——只有小房間才可信，
+   * 大房間的 Member 事件是抽樣、多數人都不會有進場事件。
+   */
+  addChat(sessionId: number, msg: EnterMessage, countAsHidden = false): string | null {
+    const uid = this.upsert(sessionId, msg, "chat", countAsHidden ? 1 : 0);
     if (!uid) return null;
     this.db
       .prepare("INSERT INTO messages(session_id, uid, ts, content) VALUES (?,?,?,?)")
       .run(sessionId, uid, msg.ts || this.now(), msg.content ?? "");
     return uid;
+  }
+
+  /** 用自訂抖音ID（unique_id / display_id）找本地紀錄 */
+  findByDisplayId(handle: string): EntrantRow | undefined {
+    const h = handle.trim();
+    if (!h) return undefined;
+    return this.db
+      .prepare(
+        `SELECT * FROM entrants
+          WHERE display_id = ? COLLATE NOCASE OR real_unique_id = ? COLLATE NOCASE
+          ORDER BY last_ts DESC LIMIT 1`
+      )
+      .get(h, h) as EntrantRow | undefined;
   }
 
   /** 需要反查真名的人：神祕人或只有發言的人，且尚未解析成功、重試未超過上限 */
@@ -236,7 +274,7 @@ export class DyEnterStore {
       .prepare(
         `SELECT * FROM entrants
           WHERE session_id=?
-            AND (mark='mystery' OR (visits=0 AND chat_count>0))
+            AND (mark='mystery' OR hidden_flag=1)
             AND (real_nickname IS NULL OR real_nickname='')
             AND resolve_tries < 3
           ORDER BY last_ts DESC LIMIT ?`
@@ -284,7 +322,7 @@ export class DyEnterStore {
       return this.db
         .prepare(
           `SELECT * FROM entrants
-            WHERE session_id=? AND (mark='suspect_hidden' OR (visits=0 AND chat_count>0))
+            WHERE session_id=? AND (mark='suspect_hidden' OR hidden_flag=1)
             ORDER BY last_ts DESC LIMIT ? OFFSET ?`
         )
         .all(sessionId, limit, offset) as EntrantRow[];
@@ -323,7 +361,7 @@ export class DyEnterStore {
         `SELECT COUNT(*) AS total,
                 SUM(CASE WHEN mark='mystery' THEN 1 ELSE 0 END) AS mystery,
                 SUM(CASE WHEN mark='suspect_hidden' THEN 1 ELSE 0 END) AS suspect,
-                SUM(CASE WHEN visits=0 AND chat_count>0 THEN 1 ELSE 0 END) AS hidden,
+                SUM(CASE WHEN hidden_flag=1 THEN 1 ELSE 0 END) AS hidden,
                 SUM(visits) AS visits,
                 SUM(chat_count) AS chats
          FROM entrants WHERE session_id=?`

@@ -49,7 +49,11 @@ export class ProfileResolver {
     this.lastAt = Date.now();
   }
 
-  /** 反查單一 uid；失敗回 null（呼叫端不要當成「沒有這個人」） */
+  /**
+   * 反查單一 uid。
+   *  · 回 null ＝ 明確查無此人（可計為一次失敗）
+   *  · throw  ＝ 網路／風控等暫時性錯誤（呼叫端不要累計重試次數）
+   */
   async resolve(uid: string): Promise<ProfileHit | null> {
     const key = String(uid || "").trim();
     if (!/^\d{5,20}$/.test(key)) return null;
@@ -74,10 +78,14 @@ export class ProfileResolver {
       });
       clearTimeout(timer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const j = (await res.json()) as {
-        status_code?: number;
-        user?: Record<string, unknown>;
-      };
+      const text = await res.text();
+      let j: { status_code?: number; user?: Record<string, unknown> };
+      try {
+        j = JSON.parse(text);
+      } catch {
+        // 常見原因：cookie 失效被導到驗證頁
+        throw new Error(`回應不是 JSON（cookie 可能失效，長度 ${text.length}）`);
+      }
       const u = j.user;
       if (j.status_code !== 0 || !u || typeof u.nickname !== "string") {
         this.cache.set(key, { at: Date.now(), hit: null });
@@ -97,7 +105,7 @@ export class ProfileResolver {
       return hit;
     } catch (e) {
       this.log(`[dy-enter] 反查 ${key} 失敗：${(e as Error).message}`);
-      return null;
+      throw e;
     }
   }
 }

@@ -12,6 +12,14 @@ const ROOM_CHECK_MS = 60_000;
 const CHAT_POLL_MS = 3_000;
 /** 反查真名：每 8 秒處理最多 2 個未解析的人（神祕人／僅發言） */
 const RESOLVE_POLL_MS = 8_000;
+/**
+ * 「疑似隱身」的可信條件：只有小房間才判。
+ * 大房間的 Member 事件是抽樣（實測 3000+ 人的房間幾乎沒幾筆進場事件），
+ * 把「有發言、沒進場」當隱身會誤標一大片。
+ */
+const HIDDEN_MAX_VIEWERS = 300;
+/** 開場後的前 2 分鐘不判（此時 Member 事件常是補發／亂序） */
+const HIDDEN_MIN_ELAPSED_MS = 120_000;
 
 export interface EnterEngineOptions {
   store: DyEnterStore;
@@ -38,6 +46,10 @@ export class EnterEngine {
   chatOk = false;
   /** 因 uid 被遮蔽（111111/空）而無法識別的訊息數（送禮常見） */
   maskedDropped = 0;
+  /** 最近一次房間快照的在線人數 */
+  viewers = 0;
+  /** 本場是否「人數小到可以完整觀察進場事件」 */
+  private roomObservable = false;
   /** 使用者手動停止：true 時不輪詢、不寫入（場次已結案） */
   paused = false;
   private cursor = "";
@@ -85,17 +97,23 @@ export class EnterEngine {
     if (!sid) return;
     let rows: ReturnType<DyEnterStore["unresolved"]>;
     try {
-      rows = this.store.unresolved(sid, 2);
+      rows = this.store.unresolved(sid, 4);
     } catch {
       return;
     }
     for (const row of rows) {
-      const hit = await this.resolver.resolve(row.uid);
-      if (hit) {
-        this.store.setReal(sid, row.uid, hit);
-        this.log(`[dy-enter] 反查 ${row.uid} → ${hit.nickname}`);
-      } else {
-        this.store.bumpResolveTry(sid, row.uid);
+      try {
+        const hit = await this.resolver.resolve(row.uid);
+        if (hit) {
+          this.store.setReal(sid, row.uid, hit);
+          this.log(`[dy-enter] 反查 ${row.uid} → ${hit.nickname}`);
+        } else {
+          // 明確查無此人 → 計一次，最多 3 次
+          this.store.bumpResolveTry(sid, row.uid);
+        }
+      } catch {
+        // 網路／風控 → 不計次，下一輪再試
+        break;
       }
     }
   }
@@ -190,7 +208,9 @@ export class EnterEngine {
               room_id: snap.room_id,
               anchor_name: snap.anchor_name,
               title: snap.title,
+              viewers: Number(snap.viewers ?? 0),
             });
+            this.viewers = Number(snap.viewers ?? 0);
             const wasLive = this.live;
             this.live = snap.status === 2;
 
@@ -224,6 +244,11 @@ export class EnterEngine {
         this.chatOk = true;
         this.lastError = "";
         if (cursor) this.cursor = cursor;
+        const startedAgo = Date.now() - (row.started_at || 0) * 1000;
+        this.roomObservable =
+          this.viewers > 0 &&
+          this.viewers <= HIDDEN_MAX_VIEWERS &&
+          startedAgo >= HIDDEN_MIN_ELAPSED_MS;
         let enters = 0;
         let chats = 0;
         for (const m of messages) {
@@ -231,7 +256,7 @@ export class EnterEngine {
             if (this.store.addEntry(cur, m)) enters += 1;
             else this.maskedDropped += 1;
           } else if (m.type === "Chat") {
-            if (this.store.addChat(cur, m)) chats += 1;
+            if (this.store.addChat(cur, m, this.roomObservable)) chats += 1;
             else this.maskedDropped += 1;
           }
         }
@@ -270,6 +295,8 @@ export class EnterEngine {
       stats: this.store.stats(sid),
       recent: this.store.recent(sid, recentLimit),
       paused: this.paused,
+      viewers: this.viewers,
+      hidden_observable: this.roomObservable,
       last_error: this.lastError,
       chat_ok: this.chatOk,
       masked_dropped: this.maskedDropped,
