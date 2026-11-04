@@ -130,6 +130,36 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
     });
   });
 
+  /** 刪除整個場次（記錄中的場次必須先暫停） */
+  api.delete("/sessions/:sid", (c) => {
+    const sid = Number(c.req.param("sid"));
+    if (!sid) return c.json({ ok: false, error: "場次編號錯誤" }, 400);
+    const row = store.session(sid);
+    if (!row) return c.json({ ok: false, error: "場次不存在" }, 404);
+    if (engine.currentSessionId === sid && !engine.paused) {
+      return c.json({ ok: false, error: "場次正在記錄中，請先按「暫停記錄」再刪除" }, 409);
+    }
+    const del = store.deleteSession(sid);
+    store.checkpoint();
+    if (engine.currentSessionId === sid) engine.detach();
+    log(
+      `[dy-enter] 刪除場次 #${sid}（${row.anchor_name ?? row.web_rid}）→ ` +
+        `${del.entrants} 人 / ${del.entries} 進場 / ${del.messages} 發言`
+    );
+    return c.json({ ok: true, deleted: del, session: { id: sid, web_rid: row.web_rid } });
+  });
+
+  /** 刪除某人在某場次的資料 */
+  api.delete("/entrants/:uid", (c) => {
+    const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
+    if (!sid) return c.json({ ok: false, error: "缺少 session_id" }, 400);
+    const uid = c.req.param("uid");
+    const del = store.deleteEntrant(sid, uid);
+    if (!del.removed) return c.json({ ok: false, error: "查無此人（可能已刪除）" }, 404);
+    log(`[dy-enter] 刪除 s#${sid} 的 ${uid} → ${del.entries} 進場 / ${del.messages} 發言`);
+    return c.json({ ok: true, deleted: del });
+  });
+
   api.get("/entrants/:uid/entries", (c) => {
     const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
     if (!sid) return c.json({ ok: false, error: "no_session" });

@@ -182,6 +182,54 @@ export default function DyEnterPage() {
     }
   };
 
+  /* ---------- 刪除 ---------- */
+  const removeSession = async () => {
+    if (!sessionId || !current) return;
+    const st = state?.stats;
+    const msg =
+      `確定刪除場次 #${sessionId}（${current.anchor_name || current.web_rid}）？\n\n` +
+      `將永久刪除：${fmt(st?.total ?? 0)} 人 / ${fmt(st?.visits ?? 0)} 筆進場 / ${fmt(st?.chats ?? 0)} 則發言\n` +
+      `此操作無法復原。`;
+    if (!window.confirm(msg)) return;
+    setStarting(true);
+    try {
+      const j = await enterApi.removeSession(sessionId);
+      setNotice(
+        `已刪除場次 #${sessionId}：${fmt(j.deleted.entrants)} 人 / ${fmt(j.deleted.entries)} 進場 / ${fmt(j.deleted.messages)} 發言`
+      );
+      setRows([]);
+      setEntries({});
+      setMsgs({});
+      setExpanded(null);
+      await loadSessions();
+      const st2 = await enterApi.state();
+      setState(st2.session ? st2 : { ...st2, session: null });
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "刪除失敗");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const removeEntrant = async (r: { uid: string; nickname: string | null; visits: number; chat_count: number }) => {
+    if (!sessionId) return;
+    const msg =
+      `確定刪除「${r.nickname || r.uid}」在本場的紀錄？\n\n` +
+      `將永久刪除：${fmt(r.visits)} 筆進場 / ${fmt(r.chat_count)} 則發言\n此操作無法復原。`;
+    if (!window.confirm(msg)) return;
+    try {
+      const j = await enterApi.removeEntrant(r.uid, sessionId);
+      setNotice(`已刪除 ${r.nickname || r.uid}：${j.deleted.entries} 筆進場 / ${j.deleted.messages} 則發言`);
+      setExpanded(null);
+      const j2 = await enterApi.entrants(sessionId, filter || undefined, 800);
+      setRows(j2.entrants);
+      const st = await enterApi.state();
+      setState(st);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "刪除失敗");
+    }
+  };
+
   /* ---------- UID 反查暱稱 ---------- */
   const lookup = async (uidArg?: string) => {
     const uid = (uidArg ?? lookupUid).trim();
@@ -351,6 +399,17 @@ export default function DyEnterPage() {
               </option>
             ))}
           </select>
+          {current && (
+            <button
+              type="button"
+              className="dye-del-session"
+              onClick={() => void removeSession()}
+              disabled={starting || (!!state && !state.paused)}
+              title={!state?.paused ? "記錄中：請先按「暫停記錄」再刪除" : "永久刪除此場次"}
+            >
+              🗑 刪除此場次
+            </button>
+          )}
           <span className={`dye-live${live ? " is-live" : ""}`}>
             <i className="dot" />
             {state?.paused
@@ -451,18 +510,19 @@ export default function DyEnterPage() {
               <th className="num">發言</th>
               <th>首次進場</th>
               <th>最後進場</th>
+              <th className="op"></th>
             </tr>
           </thead>
           <tbody>
             {!sessionId ? (
               <tr>
-                <td colSpan={9} className="empty">
+                <td colSpan={10} className="empty">
                   先在上方貼一個直播間網址，按「開始記錄」
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="empty">
+                <td colSpan={10} className="empty">
                   {listErr || (live ? "等待進場／發言事件…" : "此場次沒有紀錄")}
                 </td>
               </tr>
@@ -520,6 +580,19 @@ export default function DyEnterPage() {
                     <td className="num">{fmt(r.chat_count)}</td>
                     <td className="mono">{clock(r.first_ts)}</td>
                     <td className="mono">{clock(r.last_ts)}</td>
+                    <td className="op">
+                      <button
+                        type="button"
+                        className="row-del"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          void removeEntrant(r);
+                        }}
+                        title="刪除這個人在本場的紀錄"
+                      >
+                        🗑
+                      </button>
+                    </td>
                   </tr>
                   {expanded === r.uid && (
                     <tr key={`${r.uid}-detail`} className="dye-detail">

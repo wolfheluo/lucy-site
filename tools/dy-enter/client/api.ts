@@ -117,6 +117,16 @@ export const enterApi = {
   selectSession: (sid: number) =>
     req<{ session: EnterSession }>(`/session/${sid}/select`, { method: "POST" }),
   state: (limit = 20) => req<StatePayload>(`/state?limit=${limit}`),
+  removeSession: (sid: number) =>
+    req<{ ok: true; deleted: { entrants: number; entries: number; messages: number } }>(
+      `/sessions/${sid}`,
+      { method: "DELETE" }
+    ),
+  removeEntrant: (uid: string, sessionId: number) =>
+    req<{ ok: true; deleted: { entries: number; messages: number } }>(
+      `/entrants/${encodeURIComponent(uid)}?session_id=${sessionId}`,
+      { method: "DELETE" }
+    ),
   stop: (sid: number) => req<{ ok: true }>(`/session/${sid}/stop`, { method: "POST" }),
   resume: (sid: number) =>
     req<{ ok: true; session: EnterSession; live: boolean }>(`/session/${sid}/resume`, { method: "POST" }),

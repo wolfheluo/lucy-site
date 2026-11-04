@@ -255,6 +255,38 @@ export class DyEnterStore {
     return uid;
   }
 
+  /** 刪除整個場次（四張表一起清，單一交易） */
+  deleteSession(id: number): { removed: number; entrants: number; entries: number; messages: number } {
+    const tx = this.db.transaction((sid: number) => {
+      const messages = this.db.prepare("DELETE FROM messages WHERE session_id=?").run(sid).changes;
+      const entries = this.db.prepare("DELETE FROM entries WHERE session_id=?").run(sid).changes;
+      const entrants = this.db.prepare("DELETE FROM entrants WHERE session_id=?").run(sid).changes;
+      const removed = this.db.prepare("DELETE FROM sessions WHERE id=?").run(sid).changes;
+      return { removed, entrants, entries, messages };
+    });
+    return tx(id) as { removed: number; entrants: number; entries: number; messages: number };
+  }
+
+  /** 刪除某人在某場次的所有資料（進場明細／發言／本人） */
+  deleteEntrant(sessionId: number, uid: string): { removed: number; entries: number; messages: number } {
+    const tx = this.db.transaction((sid: number, u: string) => {
+      const messages = this.db.prepare("DELETE FROM messages WHERE session_id=? AND uid=?").run(sid, u).changes;
+      const entries = this.db.prepare("DELETE FROM entries WHERE session_id=? AND uid=?").run(sid, u).changes;
+      const removed = this.db.prepare("DELETE FROM entrants WHERE session_id=? AND uid=?").run(sid, u).changes;
+      return { removed, entries, messages };
+    });
+    return tx(sessionId, uid) as { removed: number; entries: number; messages: number };
+  }
+
+  /** 把 WAL 內容併回主檔並縮回（刪除大量資料後呼叫） */
+  checkpoint(): void {
+    try {
+      this.db.pragma("wal_checkpoint(TRUNCATE)");
+    } catch {
+      /* 有讀取鎖時會失敗，忽略 */
+    }
+  }
+
   /** 用自訂抖音ID（unique_id / display_id）找本地紀錄 */
   findByDisplayId(handle: string): EntrantRow | undefined {
     const h = handle.trim();

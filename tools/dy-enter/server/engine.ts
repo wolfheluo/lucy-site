@@ -118,6 +118,15 @@ export class EnterEngine {
     }
   }
 
+  /** 場次被刪除時呼叫：放掉當前場次（不寫入、不輪詢） */
+  detach(): void {
+    this.currentSessionId = null;
+    this.live = false;
+    this.cursor = "";
+    this.snapshot = null;
+    this.store.setSetting("current_session_id", "0");
+  }
+
   /** 使用者按「停止記錄」：只停止輪詢（場次保持開啟，資料不中斷） */
   stopRecording(): { ok: boolean; session_id?: number } {
     const sid = this.currentSessionId;
