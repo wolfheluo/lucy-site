@@ -458,3 +458,35 @@
     display: none;
   }
 }
+
+/* 停止／繼續記錄 */
+.dye-toggle {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  height: 38px;
+  font: 600 12.5px/1 ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  color: #ffb3c7;
+  background: rgba(255, 45, 120, 0.12);
+  border: 1px solid rgba(255, 45, 120, 0.45);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.dye-toggle:hover:not(:disabled) {
+  background: rgba(255, 45, 120, 0.22);
+  color: #fff;
+}
+.dye-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dye-toggle.is-resume {
+  color: var(--lime, #9cff4d);
+  background: rgba(156, 255, 77, 0.12);
+  border-color: rgba(156, 255, 77, 0.45);
+}
+.dye-toggle.is-resume:hover:not(:disabled) {
+  background: rgba(156, 255, 77, 0.22);
+  color: #fff;
+}

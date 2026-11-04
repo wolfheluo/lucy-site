@@ -234,10 +234,20 @@ export class DyEnterStore {
 
   entrants(
     sessionId: number,
-    opts: { mark?: EnterMark; limit?: number; offset?: number } = {}
+    opts: { mark?: EnterMark | "hidden"; limit?: number; offset?: number } = {}
   ): EntrantRow[] {
     const limit = Math.min(opts.limit ?? 500, 2000);
     const offset = opts.offset ?? 0;
+    if (opts.mark === "hidden") {
+      // 「疑似隱身」= 暱稱被遮蔽的人 ∪ 沒有進場事件、只靠發言捕捉的人
+      return this.db
+        .prepare(
+          `SELECT * FROM entrants
+            WHERE session_id=? AND (mark='suspect_hidden' OR (visits=0 AND chat_count>0))
+            ORDER BY last_ts DESC LIMIT ? OFFSET ?`
+        )
+        .all(sessionId, limit, offset) as EntrantRow[];
+    }
     if (opts.mark) {
       return this.db
         .prepare(

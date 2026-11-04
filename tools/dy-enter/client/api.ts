@@ -37,10 +37,13 @@ export interface Stats {
   chats: number;
 }
 
+export type EnterFilter = "mystery" | "suspect_hidden" | "hidden";
+
 export interface StatePayload {
   ok: boolean;
   session: EnterSession | null;
   live: boolean;
+  paused?: boolean;
   stats: Stats | null;
   recent: Entrant[];
   last_error?: string;
@@ -98,7 +101,10 @@ export const enterApi = {
   selectSession: (sid: number) =>
     req<{ session: EnterSession }>(`/session/${sid}/select`, { method: "POST" }),
   state: (limit = 20) => req<StatePayload>(`/state?limit=${limit}`),
-  entrants: (sessionId: number, mark?: EnterMark, limit = 500) => {
+  stop: (sid: number) => req<{ ok: true }>(`/session/${sid}/stop`, { method: "POST" }),
+  resume: (sid: number) =>
+    req<{ ok: true; session: EnterSession; live: boolean }>(`/session/${sid}/resume`, { method: "POST" }),
+  entrants: (sessionId: number, mark?: EnterMark | "hidden", limit = 500) => {
     const p = new URLSearchParams({ session_id: String(sessionId), limit: String(limit) });
     if (mark) p.set("mark", mark);
     return req<{ session_id: number; stats: Stats; entrants: Entrant[] }>(`/entrants?${p}`);

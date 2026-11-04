@@ -32,6 +32,8 @@ export class EnterEngine {
   chatOk = false;
   /** 因 uid 被遮蔽（111111/空）而無法識別的訊息數（送禮常見） */
   maskedDropped = 0;
+  /** 使用者手動停止：true 時不輪詢、不寫入（場次已結案） */
+  paused = false;
   private cursor = "";
   private timer: NodeJS.Timeout | null = null;
   private busy = false;
@@ -40,6 +42,9 @@ export class EnterEngine {
     this.store = opts.store;
     this.client = opts.client;
     this.log = opts.log ?? (() => {});
+
+    // 重啟後沿用「已暫停」狀態（使用者按過停止 → 不要自己恢復記錄）
+    if (this.store.getSetting("paused", "0") === "1") this.paused = true;
 
     // 重啟後接回最後一場（若還沒結束）
     const saved = Number(this.store.getSetting("current_session_id", "0")) || 0;
@@ -63,6 +68,29 @@ export class EnterEngine {
     this.timer = null;
   }
 
+  /** 使用者按「停止記錄」：只停止輪詢（場次保持開啟，資料不中斷） */
+  stopRecording(): { ok: boolean; session_id?: number } {
+    const sid = this.currentSessionId;
+    if (!sid) return { ok: false };
+    this.paused = true;
+    this.store.setSetting("paused", "1");
+    this.log(`[dy-enter] 場次 #${sid} 暫停記錄（場次保持開啟）`);
+    return { ok: true, session_id: sid };
+  }
+
+  /** 使用者按「繼續記錄」：同一場次續錄；若場次已結案則在同一間房開新場 */
+  async resumeRecording(sid: number): Promise<{ ok: boolean; session?: SessionRow; error?: string }> {
+    const row = this.store.session(sid);
+    if (!row) return { ok: false, error: "場次不存在" };
+    if (row.ended_at !== null) return this.selectRoom(row.web_rid); // 已結案 → 新場次
+    this.currentSessionId = row.id;
+    this.paused = false;
+    this.store.setSetting("paused", "0");
+    this.lastRoomCheck = 0; // 立刻校正狀態（不重設 cursor，避免重複計次）
+    this.log(`[dy-enter] 場次 #${row.id} 繼續記錄`);
+    return { ok: true, session: row };
+  }
+
   /** 貼 URL → 驗證房間、建立/續接場次、切換為當前場次 */
   async selectRoom(webRid: string): Promise<{ ok: boolean; session?: SessionRow; error?: string }> {
     let snap: SnapshotLike | null = null;
@@ -80,6 +108,8 @@ export class EnterEngine {
     this.currentSessionId = row.id;
     this.snapshot = snap;
     this.live = snap.status === 2;
+    this.paused = false;
+    this.store.setSetting("paused", "0");
     this.cursor = ""; // 新場次從頭收
     this.lastRoomCheck = Date.now();
     this.store.setSetting("current_session_id", String(row.id));
@@ -113,7 +143,7 @@ export class EnterEngine {
     this.busy = true;
     try {
       const sid = this.currentSessionId;
-      if (!sid) return;
+      if (!sid || this.paused) return;
       const session = this.store.session(sid);
       if (!session) return;
 
@@ -192,7 +222,14 @@ export class EnterEngine {
   state(recentLimit = 20) {
     const sid = this.currentSessionId;
     if (!sid) {
-      return { session: null, live: false, stats: null, recent: [], last_error: this.lastError };
+      return {
+        session: null,
+        live: false,
+        paused: this.paused,
+        stats: null,
+        recent: [],
+        last_error: this.lastError,
+      };
     }
     const session = this.store.session(sid) ?? null;
     return {
@@ -200,6 +237,7 @@ export class EnterEngine {
       live: this.live,
       stats: this.store.stats(sid),
       recent: this.store.recent(sid, recentLimit),
+      paused: this.paused,
       last_error: this.lastError,
       chat_ok: this.chatOk,
       masked_dropped: this.maskedDropped,

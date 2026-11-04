@@ -50,7 +50,7 @@ export default function DyEnterPage() {
 
   const [state, setState] = useState<StatePayload | null>(null);
   const [sessions, setSessions] = useState<EnterSession[]>([]);
-  const [filter, setFilter] = useState<EnterMark | "">("");
+  const [filter, setFilter] = useState<EnterMark | "hidden" | "">("");
   const [rows, setRows] = useState<Entrant[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, number[]>>({});
@@ -151,6 +151,30 @@ export default function DyEnterPage() {
       } catch {
         /* 忽略 */
       }
+    }
+  };
+
+  /* ---------- 停止／繼續記錄 ---------- */
+  const toggleRecording = async () => {
+    if (!sessionId) return;
+    setStarting(true);
+    try {
+      if (state?.paused) {
+        const j = await enterApi.resume(sessionId);
+        setNotice(`已繼續記錄 → 場次 #${j.session.id}`);
+        await loadSessions();
+      } else {
+        await enterApi.stop(sessionId);
+        setNotice("已暫停記錄（場次保持開啟，資料保留）");
+      }
+      const st = await enterApi.state();
+      setState(st);
+      const j2 = await enterApi.entrants(sessionId, filter || undefined, 800);
+      setRows(j2.entrants);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : "操作失敗");
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -268,6 +292,17 @@ export default function DyEnterPage() {
           <button type="submit" disabled={starting || !url.trim()}>
             {starting ? "連線中…" : "開始記錄"}
           </button>
+          {current && (
+            <button
+              type="button"
+              className={`dye-toggle${state?.paused ? " is-resume" : ""}`}
+              onClick={() => void toggleRecording()}
+              disabled={starting}
+              title={state?.paused ? "續接同一場次" : "停止輪詢，場次保持開啟"}
+            >
+              {state?.paused ? "▶ 繼續記錄" : "❙❙ 暫停記錄"}
+            </button>
+          )}
         </form>
 
         <div className="dye-session">
@@ -286,7 +321,13 @@ export default function DyEnterPage() {
           </select>
           <span className={`dye-live${live ? " is-live" : ""}`}>
             <i className="dot" />
-            {live ? "直播中" : current ? "已下播（停止記錄）" : "未選擇房間"}
+            {state?.paused
+              ? "已停止記錄"
+              : live
+                ? "直播中"
+                : current
+                  ? "已下播（停止記錄）"
+                  : "未選擇房間"}
           </span>
         </div>
       </header>
@@ -311,9 +352,9 @@ export default function DyEnterPage() {
           <small>沒有進場事件，只靠發言捕捉</small>
         </article>
         <article>
-          <h3>疑似隱身</h3>
+          <h3>暱稱被遮蔽</h3>
           <p className="val suspect">{fmt(counts.suspect)}</p>
-          <small>暱稱空白或全遮蔽</small>
+          <small>暱稱空白或全遮蔽（有進場事件）</small>
         </article>
         <article>
           <h3>房間</h3>
@@ -328,8 +369,8 @@ export default function DyEnterPage() {
         {([
           ["", `全部 ${fmt(counts.all)}`],
           ["mystery", `神秘人 ${fmt(counts.mystery)}`],
-          ["suspect_hidden", `疑似隱身 ${fmt(counts.suspect)}`],
-        ] as [EnterMark | "", string][]).map(([key, label]) => (
+          ["hidden", `疑似隱身 ${fmt((counts.suspect ?? 0) + (stats?.hidden_chat_only ?? 0))}`],
+        ] as [EnterMark | "hidden" | "", string][]).map(([key, label]) => (
           <button
             key={key || "all"}
             type="button"
@@ -340,7 +381,7 @@ export default function DyEnterPage() {
           </button>
         ))}
         <span className="dye-hint">
-          資料來源：進場事件（`WebcastMemberMessage`）· 每 3 秒更新 · 點列可看該人進場明細
+          資料來源：進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看進場時間與發言原文
         </span>
       </div>
 
@@ -441,7 +482,7 @@ export default function DyEnterPage() {
 
       <footer className="dye-foot">
         <span>ENTER LOG · 只記錄進場事件 · SQLite 永久保存（可切回舊場次）</span>
-        <span>{live ? "● 記錄中" : "○ 未記錄"}</span>
+        <span>{state?.paused ? "■ 已停止記錄" : live ? "● 記錄中" : "○ 未記錄"}</span>
       </footer>
     </div>
   );

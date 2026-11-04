@@ -18,7 +18,7 @@ import { parseRid } from "../../dy-monitor/server/engine.js";
 import { DyEnterStore, type EnterMark } from "./store.js";
 import { EnterEngine } from "./engine.js";
 
-const MARKS: EnterMark[] = ["mystery", "suspect_hidden"];
+const MARKS: (EnterMark | "hidden")[] = ["mystery", "suspect_hidden", "hidden"];
 
 export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHandle {
   const log = (m: string) => console.log(m);
@@ -47,6 +47,20 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
     return c.json({ ok: true, session: store.session(sid) });
   });
 
+  api.post("/session/:sid/stop", (c) => {
+    const sid = Number(c.req.param("sid"));
+    if (engine.currentSessionId !== sid) return c.json({ ok: false, error: "不是當前場次" }, 409);
+    const res = engine.stopRecording();
+    return c.json({ ok: true, session_id: res.session_id, session: store.session(sid) });
+  });
+
+  api.post("/session/:sid/resume", async (c) => {
+    const sid = Number(c.req.param("sid"));
+    const res = await engine.resumeRecording(sid);
+    if (!res.ok) return c.json({ ok: false, error: res.error }, 404);
+    return c.json({ ok: true, session: res.session, live: engine.live });
+  });
+
   api.get("/state", (c) => {
     const limit = Math.min(Number(c.req.query("limit") ?? 20) || 20, 200);
     return c.json({ ok: true, ...engine.state(limit) });
@@ -56,7 +70,9 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
     const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
     if (!sid) return c.json({ ok: false, error: "no_session" });
     const markRaw = String(c.req.query("mark") ?? "");
-    const mark = MARKS.includes(markRaw as EnterMark) ? (markRaw as EnterMark) : undefined;
+    const mark = MARKS.includes(markRaw as EnterMark | "hidden")
+      ? (markRaw as EnterMark | "hidden")
+      : undefined;
     const limit = Math.min(Number(c.req.query("limit") ?? 500) || 500, 2000);
     const offset = Number(c.req.query("offset") ?? 0) || 0;
     return c.json({
@@ -101,6 +117,7 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
       web_rid: engine.snapshot?.web_rid ?? null,
       last_error: engine.lastError || null,
       masked_dropped: engine.maskedDropped,
+      paused: engine.paused,
     })
   );
 
