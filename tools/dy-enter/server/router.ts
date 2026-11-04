@@ -17,6 +17,7 @@ import { DyClient } from "../../dy-monitor/server/dycore.js";
 import { parseRid } from "../../dy-monitor/server/engine.js";
 import { DyEnterStore, type EnterMark } from "./store.js";
 import { EnterEngine } from "./engine.js";
+import { ProfileResolver } from "./profile.js";
 
 const MARKS: (EnterMark | "hidden")[] = ["mystery", "suspect_hidden", "hidden"];
 
@@ -25,7 +26,8 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
   const store = new DyEnterStore(path.join(ctx.dataDir, "dy-enter.db"), { log });
   const cookieFile = process.env.DY_COOKIE_FILE || path.join(os.homedir(), "dy_cookies.json");
   const client = new DyClient({ cookieFile });
-  const engine = new EnterEngine({ store, client, log });
+  const resolver = new ProfileResolver(client, log);
+  const engine = new EnterEngine({ store, client, resolver, log });
 
   const disabled = process.env.NODE_ENV === "test" || process.env.DY_ENTER_DISABLE === "1";
   if (!disabled) engine.start();
@@ -81,6 +83,22 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
       stats: store.stats(sid),
       entrants: store.entrants(sid, { mark, limit, offset }),
     });
+  });
+
+  /** UID → 暱稱（同時回填當前場次的紀錄） */
+  api.get("/profile/:uid", async (c) => {
+    const uid = c.req.param("uid");
+    const hit = await resolver.resolve(uid);
+    if (!hit) return c.json({ ok: false, error: "查不到這個 UID（可能不存在或被風控）" }, 404);
+    const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
+    if (sid) {
+      try {
+        store.setReal(sid, uid, hit);
+      } catch {
+        /* 不在這場次就忽略 */
+      }
+    }
+    return c.json({ ok: true, session_id: sid || null, profile: hit });
   });
 
   api.get("/entrants/:uid/entries", (c) => {

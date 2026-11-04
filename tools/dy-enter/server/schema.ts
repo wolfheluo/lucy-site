@@ -7,6 +7,11 @@
 /** v2 遷移：舊 DB 補 chat_count / messages（ALTER 對已存在的欄位會失敗，呼叫端以 try 包住） */
 export const DY_ENTER_MIGRATIONS = [
   "ALTER TABLE entrants ADD COLUMN chat_count INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE entrants ADD COLUMN real_nickname TEXT DEFAULT ''",
+  "ALTER TABLE entrants ADD COLUMN real_unique_id TEXT DEFAULT ''",
+  "ALTER TABLE entrants ADD COLUMN real_short_id TEXT DEFAULT ''",
+  "ALTER TABLE entrants ADD COLUMN resolved_at REAL",
+  "ALTER TABLE entrants ADD COLUMN resolve_tries INTEGER NOT NULL DEFAULT 0",
 ];
 
 export const DY_ENTER_SCHEMA = `
@@ -37,6 +42,11 @@ CREATE TABLE IF NOT EXISTS entrants (
     last_ts    REAL NOT NULL,
     visits     INTEGER NOT NULL DEFAULT 1,
     chat_count INTEGER NOT NULL DEFAULT 0,
+    real_nickname  TEXT DEFAULT '',
+    real_unique_id TEXT DEFAULT '',
+    real_short_id  TEXT DEFAULT '',
+    resolved_at    REAL,
+    resolve_tries  INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, uid)
 );
 

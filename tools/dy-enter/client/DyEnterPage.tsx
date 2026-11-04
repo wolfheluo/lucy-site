@@ -14,6 +14,7 @@ import {
   type Entrant,
   type EnterMark,
   type EnterSession,
+  type ProfileHit,
   type StatePayload,
 } from "./api";
 import "./dy-enter.css";
@@ -56,6 +57,9 @@ export default function DyEnterPage() {
   const [entries, setEntries] = useState<Record<string, number[]>>({});
   const [msgs, setMsgs] = useState<Record<string, { ts: number; content: string }[]>>({});
   const [listErr, setListErr] = useState("");
+  const [lookupUid, setLookupUid] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [lookupHit, setLookupHit] = useState<ProfileHit | null>(null);
 
   const sessionId = state?.session?.id ?? 0;
   const sidRef = useRef(0);
@@ -175,6 +179,34 @@ export default function DyEnterPage() {
       setNotice(err instanceof ApiError ? err.message : "操作失敗");
     } finally {
       setStarting(false);
+    }
+  };
+
+  /* ---------- UID 反查暱稱 ---------- */
+  const lookup = async (uidArg?: string) => {
+    const uid = (uidArg ?? lookupUid).trim();
+    if (!/^\d{5,20}$/.test(uid)) {
+      setNotice("請輸入純數字的 UID");
+      return;
+    }
+    setLooking(true);
+    try {
+      const j = await enterApi.profile(uid, sessionId || undefined);
+      setLookupHit(j.profile);
+      setNotice(
+        `UID ${uid} → ${j.profile.nickname}` +
+          (j.profile.uniqueId ? `（抖音號 ${j.profile.uniqueId}）` : "") +
+          `｜粉絲 ${j.profile.followers}`
+      );
+      if (sessionId) {
+        const j2 = await enterApi.entrants(sessionId, filter || undefined, 800);
+        setRows(j2.entrants);
+      }
+    } catch (err) {
+      setLookupHit(null);
+      setNotice(err instanceof ApiError ? err.message : "反查失敗");
+    } finally {
+      setLooking(false);
     }
   };
 
@@ -380,6 +412,26 @@ export default function DyEnterPage() {
             {label}
           </button>
         ))}
+        <span className="dye-lookup">
+          <input
+            value={lookupUid}
+            onChange={(e) => setLookupUid(e.target.value)}
+            placeholder="輸入 UID 反查暱稱"
+            inputMode="numeric"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void lookup();
+            }}
+          />
+          <button type="button" onClick={() => void lookup()} disabled={looking || !lookupUid.trim()}>
+            {looking ? "查詢中…" : "反查"}
+          </button>
+          {lookupHit && (
+            <em>
+              {lookupHit.nickname}
+              {lookupHit.uniqueId ? ` · ${lookupHit.uniqueId}` : ""}
+            </em>
+          )}
+        </span>
         <span className="dye-hint">
           資料來源：進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看進場時間與發言原文
         </span>
@@ -391,6 +443,7 @@ export default function DyEnterPage() {
             <tr>
               <th>#</th>
               <th>暱稱／標記</th>
+              <th>真實暱稱</th>
               <th>UID</th>
               <th>抖音號</th>
               <th className="num">進場</th>
@@ -402,13 +455,13 @@ export default function DyEnterPage() {
           <tbody>
             {!sessionId ? (
               <tr>
-                <td colSpan={8} className="empty">
+                <td colSpan={9} className="empty">
                   先在上方貼一個直播間網址，按「開始記錄」
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="empty">
+                <td colSpan={9} className="empty">
                   {listErr || (live ? "等待進場／發言事件…" : "此場次沒有紀錄")}
                 </td>
               </tr>
@@ -442,6 +495,26 @@ export default function DyEnterPage() {
                     </td>
                     <td className="mono">{r.uid}</td>
                     <td className="mono">{r.display_id || "—"}</td>
+                    <td className="real">
+                      {r.real_nickname ? (
+                        <span className="real-name" title={`UID ${r.uid}`}>
+                          {r.real_nickname}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="real-btn"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            void lookup(r.uid);
+                          }}
+                          disabled={looking}
+                          title="用 UID 反查真實暱稱"
+                        >
+                          🔍 反查
+                        </button>
+                      )}
+                    </td>
                     <td className="num">{fmt(r.visits)}</td>
                     <td className="num">{fmt(r.chat_count)}</td>
                     <td className="mono">{clock(r.first_ts)}</td>

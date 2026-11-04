@@ -51,6 +51,11 @@ export interface EntrantRow {
   last_ts: number;
   visits: number;
   chat_count: number;
+  real_nickname?: string | null;
+  real_unique_id?: string | null;
+  real_short_id?: string | null;
+  resolved_at?: number | null;
+  resolve_tries?: number;
 }
 
 export interface SnapshotLike {
@@ -223,6 +228,42 @@ export class DyEnterStore {
       .prepare("INSERT INTO messages(session_id, uid, ts, content) VALUES (?,?,?,?)")
       .run(sessionId, uid, msg.ts || this.now(), msg.content ?? "");
     return uid;
+  }
+
+  /** 需要反查真名的人：神祕人或只有發言的人，且尚未解析成功、重試未超過上限 */
+  unresolved(sessionId: number, limit = 1): EntrantRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM entrants
+          WHERE session_id=?
+            AND (mark='mystery' OR (visits=0 AND chat_count>0))
+            AND (real_nickname IS NULL OR real_nickname='')
+            AND resolve_tries < 3
+          ORDER BY last_ts DESC LIMIT ?`
+      )
+      .all(sessionId, limit) as EntrantRow[];
+  }
+
+  /** 寫入反查結果 */
+  setReal(
+    sessionId: number,
+    uid: string,
+    hit: { nickname: string; uniqueId?: string; shortId?: string }
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE entrants SET real_nickname=?, real_unique_id=?, real_short_id=?,
+                             resolved_at=?, resolve_tries=resolve_tries+1
+         WHERE session_id=? AND uid=?`
+      )
+      .run(hit.nickname, hit.uniqueId ?? "", hit.shortId ?? "", this.now(), sessionId, uid);
+  }
+
+  /** 反查失敗：累計重試次數（避免無限打） */
+  bumpResolveTry(sessionId: number, uid: string): void {
+    this.db
+      .prepare("UPDATE entrants SET resolve_tries=resolve_tries+1 WHERE session_id=? AND uid=?")
+      .run(sessionId, uid);
   }
 
   /** 該人的發言內容 */

@@ -26,6 +26,21 @@ export interface Entrant {
   last_ts: number;
   visits: number;
   chat_count: number;
+  real_nickname?: string | null;
+  real_unique_id?: string | null;
+  real_short_id?: string | null;
+  resolved_at?: number | null;
+}
+
+export interface ProfileHit {
+  uid: string;
+  nickname: string;
+  uniqueId: string;
+  shortId: string;
+  secUid: string;
+  followers: number;
+  awemes: number;
+  signature: string;
 }
 
 export interface Stats {
@@ -111,6 +126,10 @@ export const enterApi = {
   },
   entries: (uid: string, sessionId: number) =>
     req<{ entries: { ts: number }[] }>(`/entrants/${encodeURIComponent(uid)}/entries?session_id=${sessionId}`),
+  profile: (uid: string, sessionId?: number) =>
+    req<{ ok: true; profile: ProfileHit; session_id: number | null }>(
+      `/profile/${encodeURIComponent(uid)}${sessionId ? `?session_id=${sessionId}` : ""}`
+    ),
   messages: (uid: string, sessionId: number) =>
     req<{ messages: { ts: number; content: string }[] }>(
       `/entrants/${encodeURIComponent(uid)}/messages?session_id=${sessionId}`

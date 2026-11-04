@@ -490,3 +490,80 @@
   background: rgba(156, 255, 77, 0.22);
   color: #fff;
 }
+
+/* 真實暱稱欄 + UID 反查 */
+.dye-table td.real {
+  white-space: nowrap;
+}
+.real-name {
+  color: #ffd9e6;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.real-btn {
+  padding: 3px 9px;
+  font: 600 11px/1.4 ui-monospace, monospace;
+  color: #b07bff;
+  background: rgba(176, 123, 255, 0.12);
+  border: 1px dashed rgba(176, 123, 255, 0.5);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.real-btn:hover:not(:disabled) {
+  background: rgba(176, 123, 255, 0.24);
+  color: #fff;
+}
+.real-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.real-dash {
+  color: #4a6070;
+}
+.dye-lookup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.dye-lookup input {
+  width: 168px;
+  height: 30px;
+  padding: 0 10px;
+  font: 500 12px/1 ui-monospace, monospace;
+  color: var(--ink, #dff6ff);
+  background: rgba(4, 20, 28, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 6px;
+  outline: none;
+}
+.dye-lookup input:focus {
+  border-color: rgba(0, 229, 255, 0.6);
+}
+.dye-lookup button {
+  height: 30px;
+  padding: 0 12px;
+  font: 600 11.5px/1 ui-monospace, monospace;
+  color: var(--cyan, #00e5ff);
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dye-lookup button:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.2);
+}
+.dye-lookup button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dye-lookup em {
+  font: 500 11.5px/1 ui-monospace, monospace;
+  font-style: normal;
+  color: #ffd9e6;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

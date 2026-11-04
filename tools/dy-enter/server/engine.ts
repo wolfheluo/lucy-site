@@ -6,20 +6,26 @@
 // =====================================================================
 import { DyClient } from "../../dy-monitor/server/dycore.js";
 import type { SessionRow, DyEnterStore, SnapshotLike } from "./store.js";
+import type { ProfileResolver } from "./profile.js";
 
 const ROOM_CHECK_MS = 60_000;
 const CHAT_POLL_MS = 3_000;
+/** 反查真名：每 8 秒處理最多 2 個未解析的人（神祕人／僅發言） */
+const RESOLVE_POLL_MS = 8_000;
 
 export interface EnterEngineOptions {
   store: DyEnterStore;
   client: DyClient;
+  resolver: ProfileResolver;
   log?: (m: string) => void;
 }
 
 export class EnterEngine {
   private store: DyEnterStore;
   private client: DyClient;
+  private resolver: ProfileResolver;
   private log: (m: string) => void;
+  private resolveTimer: NodeJS.Timeout | null = null;
 
   /** 目前正在記錄的場次 */
   currentSessionId: number | null = null;
@@ -41,6 +47,7 @@ export class EnterEngine {
   constructor(opts: EnterEngineOptions) {
     this.store = opts.store;
     this.client = opts.client;
+    this.resolver = opts.resolver;
     this.log = opts.log ?? (() => {});
 
     // 重啟後沿用「已暫停」狀態（使用者按過停止 → 不要自己恢復記錄）
@@ -60,12 +67,37 @@ export class EnterEngine {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => void this.tick(), CHAT_POLL_MS);
+    this.resolveTimer = setInterval(() => void this.resolveLoop(), RESOLVE_POLL_MS);
     this.log("[dy-enter] 引擎啟動");
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.resolveTimer) clearInterval(this.resolveTimer);
     this.timer = null;
+    this.resolveTimer = null;
+  }
+
+  /** 背景補真名：神祕人／只有發言的人，逐個反查（有速率限制，不阻塞主輪詢） */
+  private async resolveLoop(): Promise<void> {
+    if (this.paused) return;
+    const sid = this.currentSessionId;
+    if (!sid) return;
+    let rows: ReturnType<DyEnterStore["unresolved"]>;
+    try {
+      rows = this.store.unresolved(sid, 2);
+    } catch {
+      return;
+    }
+    for (const row of rows) {
+      const hit = await this.resolver.resolve(row.uid);
+      if (hit) {
+        this.store.setReal(sid, row.uid, hit);
+        this.log(`[dy-enter] 反查 ${row.uid} → ${hit.nickname}`);
+      } else {
+        this.store.bumpResolveTry(sid, row.uid);
+      }
+    }
   }
 
   /** 使用者按「停止記錄」：只停止輪詢（場次保持開啟，資料不中斷） */
