@@ -49,6 +49,7 @@ export interface Stats {
   mystery: number;
   suspect_hidden: number;
   hidden_chat_only: number;
+  anon: number;
   visits: number;
   chats: number;
 }

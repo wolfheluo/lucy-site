@@ -443,6 +443,11 @@ export default function DyEnterPage() {
           <small>沒有進場事件，只靠發言捕捉</small>
         </article>
         <article>
+          <h3>匿名</h3>
+          <p className="val anonv">{fmt(stats?.anon ?? 0)}</p>
+          <small>uid 被換成 111111（無法反查）</small>
+        </article>
+        <article>
           <h3>暱稱被遮蔽</h3>
           <p className="val suspect">{fmt(counts.suspect)}</p>
           <small>暱稱空白或全遮蔽（有進場事件）</small>
@@ -542,6 +547,11 @@ export default function DyEnterPage() {
                       {r.hidden_flag === 1 && (
                         <span className="badge hidden">疑似隱身（僅發言）</span>
                       )}
+                      {r.uid.startsWith("anon:") && (
+                        <span className="badge anon" title="匿名用戶：uid 被換成 111111，無法反查">
+                          匿名
+                        </span>
+                      )}
                       {r.sec_uid && (
                         <a
                           className="plink"
@@ -569,8 +579,8 @@ export default function DyEnterPage() {
                             ev.stopPropagation();
                             void lookup(r.uid);
                           }}
-                          disabled={looking}
-                          title="用抖音ID 反查真實ID"
+                          disabled={looking || r.uid.startsWith("anon:")}
+                          title={r.uid.startsWith("anon:") ? "匿名用戶無法反查" : "用抖音ID 反查真實ID"}
                         >
                           🔍 反查
                         </button>

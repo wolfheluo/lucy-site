@@ -88,31 +88,20 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
   /** UID → 暱稱（同時回填當前場次的紀錄） */
   api.get("/profile/:uid", async (c) => {
     const raw = c.req.param("uid").trim();
-    // 抖音ID 不一定是純數字（可自訂，例如 wolfheluo）→ 先在本地紀錄換成 uid
-    let uid = raw;
-    let matched = store.findByDisplayId(raw);
-    if (!/^\d{5,20}$/.test(raw)) {
-      if (!matched) {
-        return c.json(
-          { ok: false, error: `本場紀錄裡沒有抖音ID「${raw}」（自訂ID只能用已記錄過的人反查）` },
-          404
-        );
-      }
-      uid = matched.uid;
-    }
+    // 可輸入：數字 uid、sec_uid、或自訂抖音號（例：wolfheluo）
+    // 自訂抖音號 → iesdouyin 換 sec_uid → profile，全程免簽名
+    const matched = store.findByDisplayId(raw) ?? undefined;
     let hit: Awaited<ReturnType<typeof resolver.resolve>> = null;
     try {
-      hit = await resolver.resolve(uid);
+      hit = await resolver.resolve(raw);
     } catch (e) {
       return c.json({ ok: false, error: `反查暫時失敗：${(e as Error).message}` }, 502);
     }
     if (!hit) {
-      return c.json(
-        { ok: false, error: `查不到抖音ID ${raw}（uid=${uid}）：不存在或被風控` },
-        404
-      );
+      return c.json({ ok: false, error: `查不到抖音ID「${raw}」（不存在、已改號或被風控）` }, 404);
     }
-    if (!matched) matched = store.findByDisplayId(uid) ?? undefined;
+    const uid = hit.uid || matched?.uid || raw;
+    const matchedRow = matched ?? store.findByDisplayId(uid) ?? undefined;
     const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
     if (sid) {
       try {
@@ -125,7 +114,7 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
       ok: true,
       session_id: sid || null,
       uid,
-      matched_nickname: matched?.nickname ?? null,
+      matched_nickname: matchedRow?.nickname ?? null,
       profile: hit,
     });
   });

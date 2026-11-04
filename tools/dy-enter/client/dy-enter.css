@@ -617,3 +617,13 @@
   border-color: rgba(255, 90, 90, 0.45);
   background: rgba(255, 60, 60, 0.12);
 }
+
+.badge.anon {
+  color: #ffd166;
+  background: rgba(255, 209, 102, 0.14);
+  border: 1px solid rgba(255, 209, 102, 0.42);
+}
+.dye-summary .val.anonv {
+  color: #ffd166;
+  text-shadow: 0 0 16px rgba(255, 209, 102, 0.25);
+}

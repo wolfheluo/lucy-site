@@ -194,12 +194,21 @@ export class DyEnterStore {
     kind: "enter" | "chat",
     hiddenFlag = 0
   ): string | null {
-    const uid = (msg.user_id ?? "").trim();
-    // 送禮訊息把匿名 uid 換成哨兵值 111111 → 無法識別，丟棄（由呼叫端計數）
-    if (!uid || uid === "111111") return null;
+    let uid = (msg.user_id ?? "").trim();
+    /**
+     * 匿名用戶：伺服器把 uid 換成哨兵 111111、抖音號換成 douXXXXXXXX（假 ID）。
+     * 真實身分拿不到，但訊息本身有效 → 用 anon:<假ID> 當合成 uid 記錄，
+     * 這樣同一個匿名者在本場的發言會歸戶，而不是整批丟掉。
+     */
+    if (uid === "111111") {
+      const alias = (msg.display_id ?? "").trim() || (msg.nickname ?? "").trim();
+      if (!alias) return null;
+      uid = `anon:${alias}`;
+    }
+    if (!uid) return null;
     const ts = msg.ts || this.now();
     const nick = msg.nickname ?? "";
-    const mark = markOf(nick);
+    const mark = uid.startsWith("anon:") ? "" : markOf(nick);
     this.db
       .prepare(
         `INSERT INTO entrants(session_id, uid, nickname, display_id, sec_uid, mark,
@@ -307,6 +316,7 @@ export class DyEnterStore {
         `SELECT * FROM entrants
           WHERE session_id=?
             AND (mark='mystery' OR hidden_flag=1)
+            AND uid NOT LIKE 'anon:%'
             AND (real_nickname IS NULL OR real_nickname='')
             AND resolve_tries < 3
           ORDER BY last_ts DESC LIMIT ?`
@@ -385,6 +395,7 @@ export class DyEnterStore {
     mystery: number;
     suspect_hidden: number;
     hidden_chat_only: number;
+    anon: number;
     visits: number;
     chats: number;
   } {
@@ -394,6 +405,7 @@ export class DyEnterStore {
                 SUM(CASE WHEN mark='mystery' THEN 1 ELSE 0 END) AS mystery,
                 SUM(CASE WHEN mark='suspect_hidden' THEN 1 ELSE 0 END) AS suspect,
                 SUM(CASE WHEN hidden_flag=1 THEN 1 ELSE 0 END) AS hidden,
+                SUM(CASE WHEN uid LIKE 'anon:%' THEN 1 ELSE 0 END) AS anon,
                 SUM(visits) AS visits,
                 SUM(chat_count) AS chats
          FROM entrants WHERE session_id=?`
@@ -403,6 +415,7 @@ export class DyEnterStore {
       mystery: number | null;
       suspect: number | null;
       hidden: number | null;
+      anon: number | null;
       visits: number | null;
       chats: number | null;
     };
@@ -411,6 +424,7 @@ export class DyEnterStore {
       mystery: row.mystery ?? 0,
       suspect_hidden: row.suspect ?? 0,
       hidden_chat_only: row.hidden ?? 0,
+      anon: row.anon ?? 0,
       visits: row.visits ?? 0,
       chats: row.chats ?? 0,
     };
