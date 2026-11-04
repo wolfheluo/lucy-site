@@ -92,6 +92,7 @@ request receives `401`.
 | DELETE | `/targets/:rid` | Removes a target; the selected room cannot be removed |
 | POST | `/targets/:rid/select` | Switches the dashboard to that room |
 | GET | `/replay/:rid` | Last session with activity: KPI, series, 120 events, rank, fans, contribution board |
+| GET | `/people?rid&mystery&q&limit` | Accounts seen in the latest session (uid, Douyin ID, sec_uid, event types, first/last seen); `mystery=1` returns anonymous users only. Mystery viewers keep their real uid in enter/chat messages, so their account can be resolved even when the gift message masks it as `111111` |
 | GET | `/notifications?limit=` | Recent delivery attempts |
 | POST | `/notify/test` | Sends a test message and records the outcome |
 | GET | `/health` | Engine state, data age, credential presence, database size |
