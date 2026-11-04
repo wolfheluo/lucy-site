@@ -4,6 +4,11 @@
 //  entrants  每人一列（session 內去重，uid 為鍵）
 //  entries   每次進場一列（明細）
 // =====================================================================
+/** v2 遷移：舊 DB 補 chat_count / messages（ALTER 對已存在的欄位會失敗，呼叫端以 try 包住） */
+export const DY_ENTER_MIGRATIONS = [
+  "ALTER TABLE entrants ADD COLUMN chat_count INTEGER NOT NULL DEFAULT 0",
+];
+
 export const DY_ENTER_SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -31,6 +36,7 @@ CREATE TABLE IF NOT EXISTS entrants (
     first_ts   REAL NOT NULL,
     last_ts    REAL NOT NULL,
     visits     INTEGER NOT NULL DEFAULT 1,
+    chat_count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (session_id, uid)
 );
 
@@ -45,6 +51,16 @@ CREATE INDEX IF NOT EXISTS ix_entrants_session_last
     ON entrants(session_id, last_ts DESC);
 CREATE INDEX IF NOT EXISTS ix_entrants_session_mark
     ON entrants(session_id, mark);
+CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    uid        TEXT NOT NULL,
+    ts         REAL NOT NULL,
+    content    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS ix_messages_session_uid
+    ON messages(session_id, uid, ts);
 CREATE INDEX IF NOT EXISTS ix_entries_session_uid
     ON entries(session_id, uid, ts);
 CREATE INDEX IF NOT EXISTS ix_sessions_web_rid

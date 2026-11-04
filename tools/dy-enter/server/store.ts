@@ -2,7 +2,7 @@
 //  dy-enter 落地層（better-sqlite3，同步寫入；進場量低，不需要寫入佇列）
 // =====================================================================
 import Database from "better-sqlite3";
-import { DY_ENTER_SCHEMA } from "./schema.js";
+import { DY_ENTER_MIGRATIONS, DY_ENTER_SCHEMA } from "./schema.js";
 
 /** 標記：神秘人／疑似隱身／一般 */
 export type EnterMark = "" | "mystery" | "suspect_hidden";
@@ -34,6 +34,7 @@ export interface SessionRow {
 export interface EnterMessage {
   type: string;
   nickname: string;
+  content?: string;
   user_id?: string;
   display_id?: string;
   sec_uid?: string;
@@ -49,6 +50,7 @@ export interface EntrantRow {
   first_ts: number;
   last_ts: number;
   visits: number;
+  chat_count: number;
 }
 
 export interface SnapshotLike {
@@ -71,6 +73,13 @@ export class DyEnterStore {
     this.db.pragma("synchronous = NORMAL");
     this.db.pragma("busy_timeout = 5000");
     this.db.exec(DY_ENTER_SCHEMA);
+    for (const sql of DY_ENTER_MIGRATIONS) {
+      try {
+        this.db.exec(sql);
+      } catch {
+        /* 欄位已存在 */
+      }
+    }
     log(`[dy-enter] SQLite ${file}`);
   }
 
@@ -159,41 +168,68 @@ export class DyEnterStore {
   }
 
   // ---------- 進場 ----------
-  /** 寫入一次進場（entrants upsert + entries 一列） */
-  addEntry(sessionId: number, msg: EnterMessage): void {
+  /** 共用 upsert：進場（enter）與發言（chat）都會建立/更新同一個人 */
+  private upsert(sessionId: number, msg: EnterMessage, kind: "enter" | "chat"): string | null {
     const uid = (msg.user_id ?? "").trim();
-    if (!uid || uid === "111111") return; // 無 uid（或被遮蔽）無法識別 → 不記
+    // 送禮訊息把匿名 uid 換成哨兵值 111111 → 無法識別，丟棄（由呼叫端計數）
+    if (!uid || uid === "111111") return null;
     const ts = msg.ts || this.now();
     const nick = msg.nickname ?? "";
     const mark = markOf(nick);
-    const tx = this.db.transaction(() => {
-      this.db
-        .prepare(
-          `INSERT INTO entrants(session_id, uid, nickname, display_id, sec_uid, mark, first_ts, last_ts, visits)
-           VALUES (?,?,?,?,?,?,?,?,1)
-           ON CONFLICT(session_id, uid) DO UPDATE SET
-             visits = entrants.visits + 1,
-             last_ts = excluded.last_ts,
-             nickname = CASE WHEN excluded.nickname<>'' THEN excluded.nickname ELSE entrants.nickname END,
-             display_id = CASE WHEN excluded.display_id<>'' THEN excluded.display_id ELSE entrants.display_id END,
-             sec_uid = CASE WHEN excluded.sec_uid<>'' THEN excluded.sec_uid ELSE entrants.sec_uid END,
-             mark = CASE WHEN excluded.mark<>'' THEN excluded.mark ELSE entrants.mark END`
-        )
-        .run(
-          sessionId,
-          uid,
-          nick,
-          msg.display_id ?? "",
-          msg.sec_uid ?? "",
-          mark,
-          ts,
-          ts
-        );
-      this.db
-        .prepare("INSERT INTO entries(session_id, uid, ts) VALUES (?,?,?)")
-        .run(sessionId, uid, ts);
-    });
-    tx();
+    this.db
+      .prepare(
+        `INSERT INTO entrants(session_id, uid, nickname, display_id, sec_uid, mark,
+                              first_ts, last_ts, visits, chat_count)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(session_id, uid) DO UPDATE SET
+           visits = entrants.visits + excluded.visits,
+           chat_count = entrants.chat_count + excluded.chat_count,
+           last_ts = excluded.last_ts,
+           nickname = CASE WHEN excluded.nickname<>'' THEN excluded.nickname ELSE entrants.nickname END,
+           display_id = CASE WHEN excluded.display_id<>'' THEN excluded.display_id ELSE entrants.display_id END,
+           sec_uid = CASE WHEN excluded.sec_uid<>'' THEN excluded.sec_uid ELSE entrants.sec_uid END,
+           mark = CASE WHEN excluded.mark<>'' THEN excluded.mark ELSE entrants.mark END`
+      )
+      .run(
+        sessionId,
+        uid,
+        nick,
+        msg.display_id ?? "",
+        msg.sec_uid ?? "",
+        mark,
+        ts,
+        ts,
+        kind === "enter" ? 1 : 0,
+        kind === "chat" ? 1 : 0
+      );
+    return uid;
+  }
+
+  /** 寫入一次進場（entrants.visits + entries 一列） */
+  addEntry(sessionId: number, msg: EnterMessage): string | null {
+    const uid = this.upsert(sessionId, msg, "enter");
+    if (!uid) return null;
+    this.db
+      .prepare("INSERT INTO entries(session_id, uid, ts) VALUES (?,?,?)")
+      .run(sessionId, uid, msg.ts || this.now());
+    return uid;
+  }
+
+  /** 寫入一次發言（entrants.chat_count + messages 一列；內容照存） */
+  addChat(sessionId: number, msg: EnterMessage): string | null {
+    const uid = this.upsert(sessionId, msg, "chat");
+    if (!uid) return null;
+    this.db
+      .prepare("INSERT INTO messages(session_id, uid, ts, content) VALUES (?,?,?,?)")
+      .run(sessionId, uid, msg.ts || this.now(), msg.content ?? "");
+    return uid;
+  }
+
+  /** 該人的發言內容 */
+  messages(sessionId: number, uid: string): { ts: number; content: string }[] {
+    return this.db
+      .prepare("SELECT ts, content FROM messages WHERE session_id=? AND uid=? ORDER BY ts")
+      .all(sessionId, uid) as { ts: number; content: string }[];
   }
 
   entrants(
@@ -223,21 +259,39 @@ export class DyEnterStore {
       .all(sessionId, uid) as { ts: number }[];
   }
 
-  stats(sessionId: number): { total: number; mystery: number; suspect_hidden: number; visits: number } {
+  stats(sessionId: number): {
+    total: number;
+    mystery: number;
+    suspect_hidden: number;
+    hidden_chat_only: number;
+    visits: number;
+    chats: number;
+  } {
     const row = this.db
       .prepare(
         `SELECT COUNT(*) AS total,
                 SUM(CASE WHEN mark='mystery' THEN 1 ELSE 0 END) AS mystery,
                 SUM(CASE WHEN mark='suspect_hidden' THEN 1 ELSE 0 END) AS suspect,
-                SUM(visits) AS visits
+                SUM(CASE WHEN visits=0 AND chat_count>0 THEN 1 ELSE 0 END) AS hidden,
+                SUM(visits) AS visits,
+                SUM(chat_count) AS chats
          FROM entrants WHERE session_id=?`
       )
-      .get(sessionId) as { total: number; mystery: number | null; suspect: number | null; visits: number | null };
+      .get(sessionId) as {
+      total: number;
+      mystery: number | null;
+      suspect: number | null;
+      hidden: number | null;
+      visits: number | null;
+      chats: number | null;
+    };
     return {
       total: row.total ?? 0,
       mystery: row.mystery ?? 0,
       suspect_hidden: row.suspect ?? 0,
+      hidden_chat_only: row.hidden ?? 0,
       visits: row.visits ?? 0,
+      chats: row.chats ?? 0,
     };
   }
 

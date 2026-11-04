@@ -74,6 +74,13 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
     return c.json({ ok: true, session_id: sid, uid, entries: store.entries(sid, uid) });
   });
 
+  api.get("/entrants/:uid/messages", (c) => {
+    const sid = Number(c.req.query("session_id") ?? engine.currentSessionId ?? 0);
+    if (!sid) return c.json({ ok: false, error: "no_session" });
+    const uid = c.req.param("uid");
+    return c.json({ ok: true, session_id: sid, uid, messages: store.messages(sid, uid) });
+  });
+
   api.get("/sessions", (c) => {
     const limit = Math.min(Number(c.req.query("limit") ?? 50) || 50, 200);
     return c.json({
@@ -93,6 +100,7 @@ export function registerDyEnter(app: Hono, ctx: ServerToolContext): ServerToolHa
       session_id: engine.currentSessionId,
       web_rid: engine.snapshot?.web_rid ?? null,
       last_error: engine.lastError || null,
+      masked_dropped: engine.maskedDropped,
     })
   );
 

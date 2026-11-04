@@ -54,6 +54,7 @@ export default function DyEnterPage() {
   const [rows, setRows] = useState<Entrant[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [entries, setEntries] = useState<Record<string, number[]>>({});
+  const [msgs, setMsgs] = useState<Record<string, { ts: number; content: string }[]>>({});
   const [listErr, setListErr] = useState("");
 
   const sessionId = state?.session?.id ?? 0;
@@ -139,10 +140,14 @@ export default function DyEnterPage() {
       return;
     }
     setExpanded(uid);
-    if (!entries[uid] && sessionId) {
+    if (sessionId && (!entries[uid] || !msgs[uid])) {
       try {
-        const j = await enterApi.entries(uid, sessionId);
-        setEntries((prev) => ({ ...prev, [uid]: j.entries.map((e) => e.ts) }));
+        const [e1, m1] = await Promise.all([
+          entries[uid] ? Promise.resolve(null) : enterApi.entries(uid, sessionId),
+          msgs[uid] ? Promise.resolve(null) : enterApi.messages(uid, sessionId),
+        ]);
+        if (e1) setEntries((prev) => ({ ...prev, [uid]: e1.entries.map((e) => e.ts) }));
+        if (m1) setMsgs((prev) => ({ ...prev, [uid]: m1.messages }));
       } catch {
         /* 忽略 */
       }
@@ -160,6 +165,7 @@ export default function DyEnterPage() {
       setState((prev) => ({ ...(prev ?? { ok: true, stats: null, recent: [] }), session: j.session, live: j.live }));
       setRows([]);
       setEntries({});
+      setMsgs({});
       setExpanded(null);
       await loadSessions();
     } catch (err) {
@@ -176,6 +182,7 @@ export default function DyEnterPage() {
       await enterApi.selectSession(sid);
       setRows([]);
       setEntries({});
+      setMsgs({});
       setExpanded(null);
     } catch {
       setNotice("切換場次失敗");
@@ -299,6 +306,11 @@ export default function DyEnterPage() {
           <small>暱稱以「神秘人」開頭</small>
         </article>
         <article>
+          <h3>疑似隱身（僅發言）</h3>
+          <p className="val hidden">{fmt(stats?.hidden_chat_only ?? 0)}</p>
+          <small>沒有進場事件，只靠發言捕捉</small>
+        </article>
+        <article>
           <h3>疑似隱身</h3>
           <p className="val suspect">{fmt(counts.suspect)}</p>
           <small>暱稱空白或全遮蔽</small>
@@ -340,7 +352,8 @@ export default function DyEnterPage() {
               <th>暱稱／標記</th>
               <th>UID</th>
               <th>抖音號</th>
-              <th className="num">進場次數</th>
+              <th className="num">進場</th>
+              <th className="num">發言</th>
               <th>首次進場</th>
               <th>最後進場</th>
             </tr>
@@ -348,14 +361,14 @@ export default function DyEnterPage() {
           <tbody>
             {!sessionId ? (
               <tr>
-                <td colSpan={7} className="empty">
+                <td colSpan={8} className="empty">
                   先在上方貼一個直播間網址，按「開始記錄」
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="empty">
-                  {listErr || (live ? "等待進場事件…（房間有人進來就會出現）" : "此場次沒有進場紀錄")}
+                <td colSpan={8} className="empty">
+                  {listErr || (live ? "等待進場／發言事件…" : "此場次沒有紀錄")}
                 </td>
               </tr>
             ) : (
@@ -371,6 +384,9 @@ export default function DyEnterPage() {
                       <span className="nick">{r.nickname || "（無暱稱）"}</span>
                       {r.mark === "mystery" && <span className="badge mystery">神秘人</span>}
                       {r.mark === "suspect_hidden" && <span className="badge suspect">疑似隱身</span>}
+                      {r.visits === 0 && r.chat_count > 0 && (
+                        <span className="badge hidden">疑似隱身（僅發言）</span>
+                      )}
                       {r.sec_uid && (
                         <a
                           className="plink"
@@ -386,6 +402,7 @@ export default function DyEnterPage() {
                     <td className="mono">{r.uid}</td>
                     <td className="mono">{r.display_id || "—"}</td>
                     <td className="num">{fmt(r.visits)}</td>
+                    <td className="num">{fmt(r.chat_count)}</td>
                     <td className="mono">{clock(r.first_ts)}</td>
                     <td className="mono">{clock(r.last_ts)}</td>
                   </tr>
@@ -393,12 +410,23 @@ export default function DyEnterPage() {
                     <tr key={`${r.uid}-detail`} className="dye-detail">
                       <td colSpan={7}>
                         <div className="detail-box">
-                          <span className="detail-title">進場明細（{entries[r.uid]?.length ?? r.visits} 次）</span>
+                          <span className="detail-title">進場（{entries[r.uid]?.length ?? r.visits} 次）</span>
                           <span className="detail-times">
                             {(entries[r.uid] ?? []).map((ts, k) => (
                               <em key={`${ts}-${k}`}>{clock(ts)}</em>
                             ))}
-                            {!entries[r.uid] && <em>載入中…</em>}
+                            {!entries[r.uid] && <em>—</em>}
+                          </span>
+                        </div>
+                        <div className="detail-box">
+                          <span className="detail-title">發言（{msgs[r.uid]?.length ?? r.chat_count} 則）</span>
+                          <span className="detail-msgs">
+                            {(msgs[r.uid] ?? []).map((m, k) => (
+                              <em key={`${m.ts}-${k}`}>
+                                <b>{clock(m.ts)}</b> {m.content || "（空）"}
+                              </em>
+                            ))}
+                            {!msgs[r.uid] && <em>—</em>}
                           </span>
                         </div>
                       </td>

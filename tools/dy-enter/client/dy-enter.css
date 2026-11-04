@@ -213,7 +213,7 @@
 /* ---------- 統計 ---------- */
 .dye-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
@@ -246,6 +246,10 @@
 .dye-summary .val.suspect {
   color: var(--amber);
   text-shadow: 0 0 16px rgba(255, 194, 35, 0.25);
+}
+.dye-summary .val.hidden {
+  color: #b07bff;
+  text-shadow: 0 0 16px rgba(176, 123, 255, 0.28);
 }
 .dye-summary small {
   font-size: 11px;
@@ -344,6 +348,27 @@
 .dye-row.is-suspect_hidden td {
   background: rgba(255, 194, 35, 0.05);
 }
+.detail-msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 220px;
+  overflow: auto;
+}
+.detail-msgs em {
+  padding: 4px 8px;
+  font: 400 11.5px/1.5 ui-monospace, monospace;
+  font-style: normal;
+  color: #cdeff9;
+  background: rgba(176, 123, 255, 0.08);
+  border: 1px solid rgba(176, 123, 255, 0.25);
+  border-radius: 5px;
+}
+.detail-msgs b {
+  margin-right: 6px;
+  font-weight: 600;
+  color: #8ba2b4;
+}
 .nick {
   margin-right: 6px;
 }
@@ -362,6 +387,11 @@
   color: var(--amber);
   background: rgba(255, 194, 35, 0.14);
   border: 1px solid rgba(255, 194, 35, 0.4);
+}
+.badge.hidden {
+  color: #b07bff;
+  background: rgba(176, 123, 255, 0.14);
+  border: 1px solid rgba(176, 123, 255, 0.42);
 }
 .plink {
   margin-left: 6px;

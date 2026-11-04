@@ -30,6 +30,8 @@ export class EnterEngine {
   lastError = "";
   lastRoomCheck = 0;
   chatOk = false;
+  /** 因 uid 被遮蔽（111111/空）而無法識別的訊息數（送禮常見） */
+  maskedDropped = 0;
   private cursor = "";
   private timer: NodeJS.Timeout | null = null;
   private busy = false;
@@ -160,13 +162,23 @@ export class EnterEngine {
         this.chatOk = true;
         this.lastError = "";
         if (cursor) this.cursor = cursor;
-        let n = 0;
+        let enters = 0;
+        let chats = 0;
         for (const m of messages) {
-          if (m.type !== "Member") continue;
-          this.store.addEntry(cur, m);
-          n += 1;
+          if (m.type === "Member") {
+            if (this.store.addEntry(cur, m)) enters += 1;
+            else this.maskedDropped += 1;
+          } else if (m.type === "Chat") {
+            if (this.store.addChat(cur, m)) chats += 1;
+            else this.maskedDropped += 1;
+          }
         }
-        if (n) this.log(`[dy-enter] #${cur} 進場 +${n}`);
+        if (enters || chats) {
+          this.log(
+            `[dy-enter] #${cur} 進場 +${enters}｜發言 +${chats}` +
+              (this.maskedDropped ? `｜遮蔽丟棄 ${this.maskedDropped}` : "")
+          );
+        }
       } catch (e) {
         this.chatOk = false;
         this.lastError = `事件流失敗：${(e as Error).message}`;
@@ -190,6 +202,7 @@ export class EnterEngine {
       recent: this.store.recent(sid, recentLimit),
       last_error: this.lastError,
       chat_ok: this.chatOk,
+      masked_dropped: this.maskedDropped,
     };
   }
 }

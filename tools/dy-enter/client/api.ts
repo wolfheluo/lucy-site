@@ -25,13 +25,16 @@ export interface Entrant {
   first_ts: number;
   last_ts: number;
   visits: number;
+  chat_count: number;
 }
 
 export interface Stats {
   total: number;
   mystery: number;
   suspect_hidden: number;
+  hidden_chat_only: number;
   visits: number;
+  chats: number;
 }
 
 export interface StatePayload {
@@ -102,6 +105,10 @@ export const enterApi = {
   },
   entries: (uid: string, sessionId: number) =>
     req<{ entries: { ts: number }[] }>(`/entrants/${encodeURIComponent(uid)}/entries?session_id=${sessionId}`),
+  messages: (uid: string, sessionId: number) =>
+    req<{ messages: { ts: number; content: string }[] }>(
+      `/entrants/${encodeURIComponent(uid)}/messages?session_id=${sessionId}`
+    ),
   sessions: (limit = 50) =>
     req<{ current: number | null; sessions: EnterSession[] }>(`/sessions?limit=${limit}`),
 };
