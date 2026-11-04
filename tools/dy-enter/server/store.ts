@@ -204,8 +204,8 @@ export class DyEnterStore {
       const alias = (msg.display_id ?? "").trim() || (msg.nickname ?? "").trim();
       if (!alias) return null;
       uid = `anon:${alias}`;
-      // 匿名訊息的假抖音號藏在暱稱/抖音號欄位，補進 display_id 讓 UI 看得到
-      if (!(msg.display_id ?? "").trim()) msg.display_id = alias;
+      // douXXXXXXXX 是系統佔位號，不是真實抖音號 → 清空 display_id，避免冒充
+      msg.display_id = "";
     }
     if (!uid) return null;
     const ts = msg.ts || this.now();

@@ -438,9 +438,9 @@ export default function DyEnterPage() {
           <small>暱稱以「神秘人」開頭</small>
         </article>
         <article>
-          <h3>疑似隱身（僅發言）</h3>
+          <h3>未見進場</h3>
           <p className="val hidden">{fmt(stats?.hidden_chat_only ?? 0)}</p>
-          <small>沒有進場事件，只靠發言捕捉</small>
+          <small>只有發言、沒有進場事件（不是隱身人數）</small>
         </article>
         <article>
           <h3>匿名</h3>
@@ -465,7 +465,7 @@ export default function DyEnterPage() {
         {([
           ["", `全部 ${fmt(counts.all)}`],
           ["mystery", `神秘人 ${fmt(counts.mystery)}`],
-          ["hidden", `疑似隱身 ${fmt((counts.suspect ?? 0) + (stats?.hidden_chat_only ?? 0))}`],
+          ["hidden", `未見進場 ${fmt((counts.suspect ?? 0) + (stats?.hidden_chat_only ?? 0))}`],
         ] as [EnterMark | "hidden" | "", string][]).map(([key, label]) => (
           <button
             key={key || "all"}
@@ -497,8 +497,7 @@ export default function DyEnterPage() {
           )}
         </span>
         <span className="dye-hint">
-          進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看明細 ·
-          隱身只在小房間（在線 ≤300）判定：大房間的進場事件是抽樣、不可信
+          進場（Member）＋ 發言（Chat）· 每 3 秒更新 · 點列可看明細
         </span>
       </div>
 
@@ -539,13 +538,13 @@ export default function DyEnterPage() {
                     className={`dye-row${r.mark ? " is-" + r.mark : ""}${expanded === r.uid ? " is-open" : ""}`}
                     onClick={() => void toggle(r.uid)}
                   >
-                    <td>{i + 1}</td>
-                    <td>
+                    <td data-label="#">{i + 1}</td>
+                    <td data-label="使用者">
                       <span className="nick">{r.nickname || "（無暱稱）"}</span>
                       {r.mark === "mystery" && <span className="badge mystery">神秘人</span>}
-                      {r.mark === "suspect_hidden" && <span className="badge suspect">疑似隱身</span>}
+                      {r.mark === "suspect_hidden" && <span className="badge suspect">暱稱被遮蔽</span>}
                       {r.hidden_flag === 1 && (
-                        <span className="badge hidden">疑似隱身（僅發言）</span>
+                        <span className="badge hidden">未見進場</span>
                       )}
                       {r.uid.startsWith("anon:") && (
                         <span className="badge anon" title="匿名用戶：uid 被換成 111111，無法反查">
@@ -564,9 +563,7 @@ export default function DyEnterPage() {
                         </a>
                       )}
                     </td>
-                    <td className="mono">{r.uid}</td>
-                    <td className="mono">{r.display_id || "—"}</td>
-                    <td className="real">
+                    <td className="real" data-label="真實ID">
                       {r.real_nickname ? (
                         <span className="real-name" title={`UID ${r.uid}`}>
                           {r.real_nickname}
@@ -586,11 +583,15 @@ export default function DyEnterPage() {
                         </button>
                       )}
                     </td>
-                    <td className="num">{fmt(r.visits)}</td>
-                    <td className="num">{fmt(r.chat_count)}</td>
-                    <td className="mono">{clock(r.first_ts)}</td>
-                    <td className="mono">{clock(r.last_ts)}</td>
-                    <td className="op">
+                    <td className="mono" data-label="抖音ID" title={r.uid.startsWith("anon:") ? "匿名：伺服器把 uid 換成 111111" : r.uid}>
+                      {r.uid.startsWith("anon:") ? "匿名" : r.uid}
+                    </td>
+                    <td className="mono" data-label="抖音暱稱">{r.display_id || "—"}</td>
+                    <td className="num" data-label="進場">{fmt(r.visits)}</td>
+                    <td className="num" data-label="發言">{fmt(r.chat_count)}</td>
+                    <td className="mono" data-label="首次">{clock(r.first_ts)}</td>
+                    <td className="mono" data-label="最後">{clock(r.last_ts)}</td>
+                    <td className="op" data-label="">
                       <button
                         type="button"
                         className="row-del"
@@ -606,7 +607,8 @@ export default function DyEnterPage() {
                   </tr>
                   {expanded === r.uid && (
                     <tr key={`${r.uid}-detail`} className="dye-detail">
-                      <td colSpan={7}>
+                      <td colSpan={10}>
+                        <div className="dye-detail-grid">
                         <div className="detail-box">
                           <span className="detail-title">進場（{entries[r.uid]?.length ?? r.visits} 次）</span>
                           <span className="detail-times">
@@ -626,6 +628,7 @@ export default function DyEnterPage() {
                             ))}
                             {!msgs[r.uid] && <em>—</em>}
                           </span>
+                        </div>
                         </div>
                       </td>
                     </tr>
