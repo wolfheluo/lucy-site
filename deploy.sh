@@ -105,6 +105,12 @@ for _ in $(seq 1 15); do
   if curl -sf http://127.0.0.1:3001/api/health >/dev/null; then ok=1; break; fi
   sleep 1
 done
+# API 起來不代表前端起來：releases 結構下 dist 不在 cwd，VAULT_DIST_DIR 沒指到 current/dist 時
+# Hono 會對 / 回 JSON 404（API 仍 200），所以這裡再驗一次首頁真的有 HTML
+if [ "$ok" = "1" ] && ! curl -s http://127.0.0.1:3001/ | grep -q 'id="root"'; then
+  echo "首頁不是 HTML（VAULT_DIST_DIR 是否指到 current/dist？）"
+  ok=2
+fi
 
 if [ "$ok" != "1" ]; then
   echo "health 失敗（$SHA）→ 回滾"

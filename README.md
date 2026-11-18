@@ -135,7 +135,7 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh     # KEEP_RELEASES=3 可改保�
 # 5) 列出 app 目錄的非執行期殘留（只報告，不動手）
 ```
 
-- **pm2（一次性、需手動）**：`cwd` 必須是 `/www/wwwroot/lucy-site`（不能是 `current/`，否則 `cwd/.env` 讀不到），`script` 必須是 `./current/dist-server/server/index.js`。`deploy.sh` 會先檢查 ecosystem 檔（預設 `/www/ecosystem-lucy.config.cjs`，可用 `ECOSYSTEM=` 覆寫）不符就停手。
+- **pm2（一次性、需手動）**：`cwd` 必須是 `/www/wwwroot/lucy-site`（不能是 `current/`，否則 `cwd/.env` 讀不到），`script` 必須是 `./current/dist-server/server/index.js`，並且要設 `VAULT_DIST_DIR=<APP_DIR>/current/dist` —— 少了它 API 會正常但 `/` 回 JSON 404（`deploy.sh` 會驗首頁是否為 HTML 並自動回滾）。ecosystem 檔預設 `/www/ecosystem-lucy.config.cjs`，可用 `ECOSYSTEM=` 覆寫。
 - **依賴**：`package-lock.json` 沒變就不碰 `node_modules`（`cp -al` 硬連結）；變了才該版 `npm ci --omit=dev --ignore-scripts`。`--ignore-scripts` 是刻意的：better-sqlite3 13.x 的 npm tarball 內含 Node-API prebuild（`prebuilds/linux-x64.node`），但 npm 仍會因為 `binding.gyp` 去跑 `node-gyp rebuild` —— 略過它，伺服器就不需要 python3／make／g++，安裝失敗也不影響線上那版。
 - **回滾**：`sudo ln -sfn releases/<舊sha> current && pm2 startOrReload`；`deploy.sh` 在 health 失敗時會自動做。
 - **殘留清理**：`scripts/server-prune.sh`（預設 dry-run，`--apply` 才刪），把 `src/`、`tests/`、舊 `dist/` 等非執行期檔案清掉；`data/` 需明示 `--delete-data`。

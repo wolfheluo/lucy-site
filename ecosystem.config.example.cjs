@@ -32,6 +32,8 @@ module.exports = {
       env: {
         NODE_ENV: "production", // 自動 serve dist/、開啟 Secure cookie、啟用 H1 防呆
         START_SERVER: "1", // pm2 fork 需要此旗標才會 listen
+        // releases 結構下 cwd 沒有 dist/：靜態檔要指到 current/dist，否則 / 會回 JSON 404
+        VAULT_DIST_DIR: "/www/wwwroot/lucy-site/current/dist",
       },
     },
   ],
