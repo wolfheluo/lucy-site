@@ -134,14 +134,14 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh
 - **首次建置**：`.env` 填好 → `npm run build` → `cp ecosystem.config.example.cjs ecosystem.config.cjs`（改 `cwd`）→ `pm2 start ecosystem.config.cjs && pm2 save`。
 - **ecosystem 只放兩個旗標**（`NODE_ENV`、`START_SERVER`）；服務參數一律在 `.env`，server 由 `cwd/.env` 讀取。
 - **nginx**：`proxy_pass http://127.0.0.1:3001;` 並轉發 `X-Forwarded-For`（同時 `.env` 設 `TRUST_PROXY=1`）。
-- **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db` 與 `dy-monitor.db`，各保留 7 份（`BACKUP_KEEP` 可調）。
+- **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db`、`dy-monitor.db`、`dy-enter.db`，各保留 7 份（`BACKUP_KEEP` 可調）。
 - **靜態託管不可行**：`dist/` 丟上 Vercel／Cloudflare Pages 只會得到首頁空殼，四個工具都依賴 `/api`。
 
 ## 腳本
 
 | 腳本 | 用途 |
 |---|---|
-| `scripts/backup-dbs.mjs` | `vault.db` + `dy-monitor.db` 每日輪替備份 |
+| `scripts/backup-dbs.mjs` | `vault.db` + `dy-monitor.db` + `dy-enter.db` 每日輪替備份 |
 | `scripts/dy-cli.mjs` | dy-monitor CLI：`list` / `show <sid>` / `events <sid> --type --limit`（`DY_CLI_PASSWORD`） |
 | `scripts/import-dy-monitor.mjs` | 一次性把舊 Python 版 `monitor.db` 匯入 `dy-monitor.db` |
 | `scripts/dy-ui-check.mjs` | 登入牆 → 儀表板 → 抽屜 → 手機版面，console 錯誤即失敗 |

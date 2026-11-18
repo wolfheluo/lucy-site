@@ -1,5 +1,5 @@
 // =====================================================================
-//  SQLite 每日備份（vault.db + dy-monitor.db）
+//  SQLite 每日備份（vault.db + dy-monitor.db + dy-enter.db）
 //  - 用 better-sqlite3 的線上 backup API（WAL 模式下安全，不需停服務）
 //  - 保留最近 KEEP 份（每個 DB 各自輪替）
 //  用法：node scripts/backup-dbs.mjs [appDir] [destDir]
@@ -16,7 +16,7 @@ const Database = require("better-sqlite3");
 const destDir = process.argv[3] ?? "/root/backups/lucy-site";
 const KEEP = Number(process.env.BACKUP_KEEP ?? 7);
 
-const DB_FILES = ["vault.db", "dy-monitor.db"];
+const DB_FILES = ["vault.db", "dy-monitor.db", "dy-enter.db"];
 
 fs.mkdirSync(destDir, { recursive: true });
 const stamp = new Date()
