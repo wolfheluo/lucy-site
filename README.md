@@ -140,7 +140,7 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh     # KEEP_RELEASES=3 可改保�
 - **回滾**：`sudo ln -sfn releases/<舊sha> current && pm2 startOrReload`；`deploy.sh` 在 health 失敗時會自動做。
 - **殘留清理**：`scripts/server-prune.sh`（預設 dry-run，`--apply` 才刪），把 `src/`、`tests/`、舊 `dist/` 等非執行期檔案清掉；`data/` 需明示 `--delete-data`。
 - **nginx**：`proxy_pass http://127.0.0.1:3001;` 並轉發 `X-Forwarded-For`（同時 `.env` 設 `TRUST_PROXY=1`）。
-- **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db`、`dy-monitor.db`、`dy-enter.db`，各保留 7 份（`BACKUP_KEEP` 可調）。
+- **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db`、`dy-monitor.db`、`dy-enter.db`，各保留 7 份（`BACKUP_KEEP` 可調）。SQLite 目錄用 `DATA_DIR` 指定（預設 `<appDir>/data`），依賴從 `current/package.json` 解析 —— 資料搬出 app 目錄後這兩者都要跟著指。
 - **靜態託管不可行**：`dist/` 丟上 Vercel／Cloudflare Pages 只會得到首頁空殼，四個工具都依賴 `/api`。
 
 ## 腳本

@@ -10,8 +10,15 @@ import path from "node:path";
 import { createRequire } from "node:module";
 
 const appDir = process.argv[2] ?? "/www/wwwroot/lucy-site";
+// SQLite 目錄：預設 <appDir>/data，但 production 已把 data 搬出 app 目錄
+// （見 .env 的 VAULT_DATA_DIR）→ 用 DATA_DIR 指過去
+const dataDir = process.env.DATA_DIR ?? path.join(appDir, "data");
 // 腳本放在 app 目錄外（/root/scripts），用 app 的 node_modules 解析 better-sqlite3
-const require = createRequire(path.join(appDir, "package.json"));
+// 新結構的依賴在 current/package.json（→ releases/<sha>/node_modules）；舊結構在 app 根
+const depBase = fs.existsSync(path.join(appDir, "current", "package.json"))
+  ? path.join(appDir, "current", "package.json")
+  : path.join(appDir, "package.json");
+const require = createRequire(depBase);
 const Database = require("better-sqlite3");
 const destDir = process.argv[3] ?? "/root/backups/lucy-site";
 const KEEP = Number(process.env.BACKUP_KEEP ?? 7);
@@ -27,7 +34,7 @@ const stamp = new Date()
 
 let failed = 0;
 for (const file of DB_FILES) {
-  const src = path.join(appDir, "data", file);
+  const src = path.join(dataDir, file);
   if (!fs.existsSync(src)) {
     console.log(`skip ${file}（不存在）`);
     continue;
