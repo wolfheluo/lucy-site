@@ -61,6 +61,8 @@ REL="$APP_DIR/releases/$SHA"
 TMP="/tmp/lucy-deploy-$SHA"
 # 用函式而不是字串：PATH 內含空格時 "$PM2 ..." 會被 word-split 拆爛
 pm2c() { sudo env PATH="$NODE_BIN:$PATH" pm2 "$@"; }
+# 任何結束路徑（含 preflight 中止、health 失敗回滾）都要把暫存清掉，否則 /tmp 會積 12MB 的殘骸
+trap 'sudo rm -rf "$TMP"' EXIT
 
 # ── preflight：缺 .env 或 ecosystem 沒指向 current → 直接停手（不要弄壞線上）──
 [ -f "$APP_DIR/.env" ] || { echo "缺少 $APP_DIR/.env（production 會拒絕啟動）"; exit 1; }
