@@ -64,13 +64,30 @@ pm2c() { sudo env PATH="$NODE_BIN:$PATH" pm2 "$@"; }
 # 任何結束路徑（含 preflight 中止、health 失敗回滾）都要把暫存清掉，否則 /tmp 會積 12MB 的殘骸
 trap 'sudo rm -rf "$TMP"' EXIT
 
-# ── preflight：缺 .env 或 ecosystem 沒指向 current → 直接停手（不要弄壞線上）──
+# ── preflight：缺 .env 或 pm2 指錯路徑 → 直接停手（不要弄壞線上）──
 [ -f "$APP_DIR/.env" ] || { echo "缺少 $APP_DIR/.env（production 會拒絕啟動）"; exit 1; }
-[ -f "$ECO" ] || { echo "缺少 pm2 ecosystem：$ECO"; exit 1; }
-grep -q "current/dist-server/server/index.js" "$ECO" 2>/dev/null \
-  || sudo grep -q "current/dist-server/server/index.js" "$ECO" \
-  || { echo "$ECO 的 script 尚未指向 ./current/dist-server/server/index.js"; \
-       echo "請改 cwd=$APP_DIR、script=./current/dist-server/server/index.js 後再部署"; exit 1; }
+for k in NODE_ENV START_SERVER VAULT_DIST_DIR; do
+  sudo grep -q "^$k=" "$APP_DIR/.env" \
+    || { echo "$APP_DIR/.env 缺少 $k（aaPanel／純 pm2 start 需要它，見 README 部署章節）"; exit 1; }
+done
+
+# 誰在管這個 app？pm2 的 lucy-site 由 aaPanel 或 ecosystem 建立的都行，
+# 但 script 必須是 current/...（寫死 releases/<sha> 的話，切版後 restart 還是跑舊版）
+APP_SCRIPT="$(pm2c jlist 2>/dev/null | python3 -c 'import sys,json
+try: d=json.load(sys.stdin)
+except Exception: d=[]
+print(next((a["pm2_env"]["pm_exec_path"] for a in d if a.get("name")=="lucy-site"), ""))' 2>/dev/null || true)"
+if [ -n "$APP_SCRIPT" ]; then
+  case "$APP_SCRIPT" in
+    */current/*) ;;
+    *) echo "pm2 的 lucy-site script 不是 current/...：$APP_SCRIPT"
+       echo "請刪掉該項目後用 aaPanel 重新建立（啟動檔案填 current/dist-server/server/index.js）"; exit 1 ;;
+  esac
+  restart_app() { pm2c restart lucy-site --update-env >/dev/null; }
+else
+  [ -f "$ECO" ] || { echo "pm2 沒有 lucy-site，也沒有 ecosystem 檔（$ECO）可 bootstrap"; exit 1; }
+  restart_app() { pm2c startOrReload "$ECO" --update-env >/dev/null; }
+fi
 
 sudo mkdir -p "$APP_DIR/releases"
 sudo rm -rf "$REL"
@@ -100,7 +117,7 @@ sudo chown -R www:www "$REL"
 
 # ── 切版 + health（失敗自動回滾）──
 sudo ln -sfn "releases/$SHA" "$APP_DIR/current"
-pm2c startOrReload "$ECO" --update-env >/dev/null
+restart_app
 
 ok=0
 for _ in $(seq 1 15); do
@@ -118,7 +135,7 @@ if [ "$ok" != "1" ]; then
   echo "health 失敗（$SHA）→ 回滾"
   if [ -n "$PREV" ]; then
     sudo ln -sfn "$PREV" "$APP_DIR/current"
-    pm2c startOrReload "$ECO" --update-env >/dev/null
+    restart_app
     for _ in $(seq 1 15); do
       curl -sf http://127.0.0.1:3001/api/health >/dev/null && { echo "已回滾到 ${PREV##*/}（health OK）"; break; }
       sleep 1

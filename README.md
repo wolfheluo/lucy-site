@@ -135,9 +135,13 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh     # KEEP_RELEASES=3 可改保�
 # 5) 列出 app 目錄的非執行期殘留（只報告，不動手）
 ```
 
-- **pm2（一次性、需手動）**：`cwd` 必須是 `/www/wwwroot/lucy-site`（不能是 `current/`，否則 `cwd/.env` 讀不到），`script` 必須是 `./current/dist-server/server/index.js`，並且要設 `VAULT_DIST_DIR=<APP_DIR>/current/dist` —— 少了它 API 會正常但 `/` 回 JSON 404（`deploy.sh` 會驗首頁是否為 HTML 並自動回滾）。ecosystem 檔預設 `/www/ecosystem-lucy.config.cjs`，可用 `ECOSYSTEM=` 覆寫。
+- **pm2／aaPanel（一次性，需手動）**：aaPanel「Node 專案 → PM2 管理器」建立時填
+  `啟動檔案 = /www/wwwroot/lucy-site/current/dist-server/server/index.js`、
+  `運行目錄 = /www/wwwroot/lucy-site`、名稱 `lucy-site`、運行用戶 `root`。
+  運行目錄**不能**是 `current/`（`process.loadEnvFile()` 讀的是 `cwd/.env`）；`NODE_ENV`／`START_SERVER`／`VAULT_DIST_DIR` 三個旗標放 `.env`（見 `.env.example`），所以面板不需要填任何環境變數。
+  `deploy.sh` 兩種管理者都支援：pm2 已經有 `lucy-site` 就 `pm2 restart lucy-site`，沒有才用 `ECOSYSTEM` 檔（預設 `/www/ecosystem-lucy.config.cjs`）bootstrap；script 若寫死 `releases/<sha>` 會直接擋下（切版後 restart 會跑舊版）。
 - **依賴**：`package-lock.json` 沒變就不碰 `node_modules`（`cp -al` 硬連結）；變了才該版 `npm ci --omit=dev --ignore-scripts`。`--ignore-scripts` 是刻意的：better-sqlite3 13.x 的 npm tarball 內含 Node-API prebuild（`prebuilds/linux-x64.node`），但 npm 仍會因為 `binding.gyp` 去跑 `node-gyp rebuild` —— 略過它，伺服器就不需要 python3／make／g++，安裝失敗也不影響線上那版。
-- **回滾**：`sudo ln -sfn releases/<舊sha> current && pm2 startOrReload`；`deploy.sh` 在 health 失敗時會自動做。
+- **回滾**：`sudo ln -sfn releases/<舊sha> current && pm2 restart lucy-site`；`deploy.sh` 在 health 或首頁檢查失敗時會自動做。
 - **殘留清理**：`scripts/server-prune.sh`（預設 dry-run，`--apply` 才刪），把 `src/`、`tests/`、舊 `dist/` 等非執行期檔案清掉；`data/` 需明示 `--delete-data`。
 - **nginx**：`proxy_pass http://127.0.0.1:3001;` 並轉發 `X-Forwarded-For`（同時 `.env` 設 `TRUST_PROXY=1`）。
 - **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db`、`dy-monitor.db`、`dy-enter.db`，各保留 7 份（`BACKUP_KEEP` 可調）。SQLite 目錄用 `DATA_DIR` 指定（預設 `<appDir>/data`），依賴從 `current/package.json` 解析 —— 資料搬出 app 目錄後這兩者都要跟著指。
