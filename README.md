@@ -120,8 +120,8 @@ data/           SQLite + 上傳檔（gitignored）
 
 ## 部署
 
-**CI/CD**（`.github/workflows/ci.yml`）：push／PR → `npm test`；`main` push 且測試通過 → build → `deploy.sh`。
-需要 repo secrets：`DEPLOY_SSH_KEY`、`DEPLOY_SERVER`、`SMOKE_PASSWORD`（fork 的 PR 讀不到 secrets，因此只有 maintainer push 會部署）。
+**CI/CD**（`.github/workflows/ci.yml`）：push／PR → `npm test`（Node 24、`npm ci --ignore-scripts` + `npm rebuild esbuild`）；`main` push 或手動 `workflow_dispatch` 且測試通過 → `deploy.sh`（build 由 `deploy.sh` 自己做，CI 不重複 build）。deploy job 有獨立 concurrency，同時只會有一個部署；PR 的新 push 會取消舊的測試 run。
+需要 repo secrets：`DEPLOY_SSH_KEY`、`DEPLOY_SERVER`、`SMOKE_PASSWORD`（有設就會在部署後跑上傳／分享冒煙；fork 的 PR 讀不到 secrets，因此只有 maintainer 會部署）。
 
 **部署形狀**：伺服器只收到 `dist/`、`dist-server/`、`package.json`、`package-lock.json`；`node_modules` 由伺服器自己產生；每次部署是一個 `releases/<sha>/`，由 `current` symlink 指過去，health 沒過就自動切回上一版。app 目錄因此只該有 `releases/`、`current`、`.env`（`data/` 用 `VAULT_DATA_DIR` 放別處）。
 
@@ -159,7 +159,7 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh     # KEEP_RELEASES=3 可改保�
 
 ## 測試
 
-- `tests/*.test.ts(x)`：20 個 vitest 檔，node 環境，直接對 Hono app 發請求（auth、rate limit、file-vault、vault、binance 引擎／策略／資本、dy-monitor parser／store／engine／abogus／API、DeepSeek 餘額、元件測試）。`better-sqlite3` 在部分沙箱會 segfault，必要時改在 VPS 以部署後的 `dist-server` 驗證。
+- `tests/*.test.ts(x)`：20 個 vitest 檔，node 環境，直接對 Hono app 發請求（auth、rate limit、file-vault、vault、binance 引擎／策略／資本、dy-monitor parser／store／engine／abogus／API、DeepSeek 餘額、元件測試）。`better-sqlite3` 在部分沙箱會 segfault，必要時改在 VPS 以部署後的 `dist-server` 驗證。**Windows 本機**跑起來會有 5 個檔案在 `afterAll` 的 `rmSync(tmpdir)` 吃 `EPERM`（SQLite 檔案鎖未放），斷言本身是全綠的；以 CI（Linux）為準。
 - `tests/e2e/*.spec.ts`：3 個 Playwright spec（版面、file-vault、路由轉場），以 `reducedMotion` 跳過 Boot，`BQ_DEMO=1` + 獨立 `VAULT_DATA_DIR` 避免污染資料。`webServer` 指令使用 `rm -rf`，**需 POSIX shell**（WSL／Linux／CI）。
 
 ## 設計細節
