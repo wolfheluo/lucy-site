@@ -87,7 +87,10 @@ if [ -n "$PREV_REL" ] && [ -d "$PREV_REL/node_modules" ] \
   sudo cp -al "$PREV_REL/node_modules" "$REL/node_modules"
 else
   echo "deps: package-lock 變更或首次部署 → npm ci --omit=dev"
-  ( cd "$REL" && sudo env PATH="$NODE_BIN:$PATH" npm ci --omit=dev --no-audit --no-fund )
+  # --ignore-scripts：better-sqlite3 13.x 的 npm tarball 已內含 Node-API prebuild
+  # （prebuilds/linux-x64.node），npm 仍會因為 binding.gyp 而嘗試 node-gyp rebuild；
+  # 略過它才不需要伺服器上有 python3 / make / g++。
+  ( cd "$REL" && sudo env PATH="$NODE_BIN:$PATH" npm ci --omit=dev --ignore-scripts --no-audit --no-fund )
 fi
 echo "$LOCK" | sudo tee "$REL/.lock.sha256" >/dev/null
 sudo chown -R www:www "$REL"
