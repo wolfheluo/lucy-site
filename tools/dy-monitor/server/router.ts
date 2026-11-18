@@ -292,7 +292,15 @@ export function registerDyMonitor(app: Hono, ctx: ServerToolContext) {
   // ---------- 歷史場次（P3）----------
   // ---------- 本場出現的人（uid / 抖音號 / 神秘人）----------
   api.get("/people", (c) => {
-    const rid = c.req.query("rid") || engine.selectedRid;
+    // 沒有指定 rid 時：用引擎目前選中的房；引擎還沒選（剛重啟、沒有存過）就回退到
+    // 最近一場直播的房 —— 否則剛部署完的管理頁會一直是 no_session
+    const rid =
+      c.req.query("rid") ||
+      engine.selectedRid ||
+      (db.prepare("SELECT web_rid FROM sessions ORDER BY started_at DESC LIMIT 1").get() as
+        | { web_rid: string }
+        | undefined)?.web_rid ||
+      "";
     const limit = Math.min(Number(c.req.query("limit") ?? 800) || 800, 2000);
     const onlyMystery = ["1", "true", "yes"].includes(String(c.req.query("mystery") ?? "").toLowerCase());
     const q = String(c.req.query("q") ?? "").trim().toLowerCase();

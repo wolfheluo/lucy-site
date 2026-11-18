@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch: # 手動重跑（復原時最常用；非 main 分支不會部署）
+
+# PR 會取消舊的測試 run；main 的 push 不取消（避免把正在跑的部署砍半），
+# 同時只有一個部署由 deploy job 自己的 concurrency 保證。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -13,35 +20,43 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24 # 與 production 的 v24.20.0 對齊
           cache: npm
 
+      # better-sqlite3 13.x 的 npm tarball 內含 Node-API prebuild，不需要 node-gyp 編譯；
+      # 真正需要 postinstall 的只有 esbuild（vite build 會用）。
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm rebuild esbuild
 
       - name: Run vitest
         run: npm test
 
-  # 部署：僅 main push（非 PR）→ 測試過才執行
+  # 部署：main push 或手動觸發，且測試通過
   # secrets（DEPLOY_SSH_KEY / DEPLOY_SERVER / SMOKE_PASSWORD）由 repo 設定，
   # fork 的 PR 無權限讀取 → 只有 maintainer push 才會觸發部署
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Build (client + server)
-        run: npm run build
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm rebuild esbuild
 
       - name: Prepare deploy SSH key
         env:
@@ -54,6 +69,7 @@ jobs:
           HOST="${DEPLOY_SERVER##*@}"
           ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      # deploy.sh 自己會 build（tsc -b + vite + tsc server），失敗會在任何遠端動作前中止
       - name: Deploy via deploy.sh
         env:
           SERVER: ${{ secrets.DEPLOY_SERVER }}
