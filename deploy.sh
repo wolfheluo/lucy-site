@@ -122,6 +122,8 @@ if [ "$ok" != "1" ]; then
   exit 1
 fi
 echo "health OK（$SHA）"
+# 把目前的 app 清單寫進 pm2 dump，否則機器重開後 pm2-root 不會拉回這個服務
+pm2c save >/dev/null 2>&1 || true
 
 # ── prune：只留最新 KEEP 版，永不刪 current 指向的版本 ──
 CUR="$(basename "$(readlink "$APP_DIR/current")")"
