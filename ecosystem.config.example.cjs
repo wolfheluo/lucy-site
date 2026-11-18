@@ -7,6 +7,12 @@
 //    3. 把 cwd 改成你的部署路徑（server 從 cwd 讀 .env）
 //    4. pm2 start ecosystem.config.cjs && pm2 save
 //
+//  為什麼 script 指向 current/？
+//    - 每次部署是 releases/<sha>/，由 current symlink 指向現行版本；
+//      script 寫死 releases/... 會讓新部署永遠不生效。
+//    - cwd 必須留在 app 根（不是 current/），否則 process.loadEnvFile() 找不到 .env。
+//    - deploy.sh 會檢查這個檔案的 script 含 current/dist-server，不符就停手。
+//
 //  為什麼 env 只有兩個平台旗標？
 //    - 服務參數（PORT/HOST/VAULT_*/TRUST_PROXY/VAULT_DATA_DIR）全部在 .env，
 //      server 啟動時 process.loadEnvFile() 自動讀取（cwd/.env）——單一來源
@@ -19,7 +25,7 @@ module.exports = {
   apps: [
     {
       name: "lucy-site",
-      script: "./dist-server/server/index.js",
+      script: "./current/dist-server/server/index.js",
       cwd: "/www/wwwroot/lucy-site", // ← 改成你的部署路徑（.env 從此目錄讀）
       instances: 1,
       max_memory_restart: "600M",

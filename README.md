@@ -123,16 +123,22 @@ data/           SQLite + 上傳檔（gitignored）
 **CI/CD**（`.github/workflows/ci.yml`）：push／PR → `npm test`；`main` push 且測試通過 → build → `deploy.sh`。
 需要 repo secrets：`DEPLOY_SSH_KEY`、`DEPLOY_SERVER`、`SMOKE_PASSWORD`（fork 的 PR 讀不到 secrets，因此只有 maintainer push 會部署）。
 
-**手動增量部署**（目標機器需已建置過一次，含 pm2 app `lucy-site`）：
+**部署形狀**：伺服器只收到 `dist/`、`dist-server/`、`package.json`、`package-lock.json`；`node_modules` 由伺服器自己產生；每次部署是一個 `releases/<sha>/`，由 `current` symlink 指過去，health 沒過就自動切回上一版。app 目錄因此只該有 `releases/`、`current`、`.env`（`data/` 用 `VAULT_DATA_DIR` 放別處）。
 
 ```bash
-SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh
-# 1) 本地 production build  2) scp dist + dist-server  3) rsync --delete 到 /www/wwwroot/lucy-site
-# 4) pm2 restart lucy-site + /api/health  5) 冒煙：登入 → 上傳 → 分享 → 錯 PIN 401 → 正確 PIN 下載比對 → 清理
+SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh     # KEEP_RELEASES=3 可改保留份數（預設 5）
+# 1) 本地 production build（server 不含 sourcemap）
+# 2) scp 產物到 /tmp/lucy-deploy-<sha>
+# 3) 建 releases/<sha>：lock 未變 → 硬連結上一版 node_modules；變更 → npm ci --omit=dev
+#    切 current + startOrReload，15 秒內 health 沒過就回滾並以非 0 結束
+# 4) auth 冒煙：登入 → 上傳 → 分享 → 錯 PIN 401 → 正確 PIN 下載比對 → 清理
+# 5) 列出 app 目錄的非執行期殘留（只報告，不動手）
 ```
 
-- **首次建置**：`.env` 填好 → `npm run build` → `cp ecosystem.config.example.cjs ecosystem.config.cjs`（改 `cwd`）→ `pm2 start ecosystem.config.cjs && pm2 save`。
-- **ecosystem 只放兩個旗標**（`NODE_ENV`、`START_SERVER`）；服務參數一律在 `.env`，server 由 `cwd/.env` 讀取。
+- **pm2（一次性、需手動）**：`cwd` 必須是 `/www/wwwroot/lucy-site`（不能是 `current/`，否則 `cwd/.env` 讀不到），`script` 必須是 `./current/dist-server/server/index.js`。`deploy.sh` 會先檢查 ecosystem 檔（預設 `/www/ecosystem-lucy.config.cjs`，可用 `ECOSYSTEM=` 覆寫）不符就停手。
+- **依賴**：`package-lock.json` 沒變就不碰 `node_modules`（`cp -al` 硬連結）；變了才該版 `npm ci --omit=dev`，安裝失敗不影響線上那版。
+- **回滾**：`sudo ln -sfn releases/<舊sha> current && pm2 startOrReload`；`deploy.sh` 在 health 失敗時會自動做。
+- **殘留清理**：`scripts/server-prune.sh`（預設 dry-run，`--apply` 才刪），把 `src/`、`tests/`、舊 `dist/` 等非執行期檔案清掉；`data/` 需明示 `--delete-data`。
 - **nginx**：`proxy_pass http://127.0.0.1:3001;` 並轉發 `X-Forwarded-For`（同時 `.env` 設 `TRUST_PROXY=1`）。
 - **備份**：`scripts/backup-dbs.mjs` 以 better-sqlite3 線上 backup API 每日 04:10 備份 `vault.db`、`dy-monitor.db`、`dy-enter.db`，各保留 7 份（`BACKUP_KEEP` 可調）。
 - **靜態託管不可行**：`dist/` 丟上 Vercel／Cloudflare Pages 只會得到首頁空殼，四個工具都依賴 `/api`。
@@ -142,6 +148,7 @@ SERVER=user@host SMOKE_PASSWORD=xxx ./deploy.sh
 | 腳本 | 用途 |
 |---|---|
 | `scripts/backup-dbs.mjs` | `vault.db` + `dy-monitor.db` + `dy-enter.db` 每日輪替備份 |
+| `scripts/server-prune.sh` | 清 app 目錄的非執行期殘留（預設 dry-run，`--apply` 才刪） |
 | `scripts/dy-cli.mjs` | dy-monitor CLI：`list` / `show <sid>` / `events <sid> --type --limit`（`DY_CLI_PASSWORD`） |
 | `scripts/import-dy-monitor.mjs` | 一次性把舊 Python 版 `monitor.db` 匯入 `dy-monitor.db` |
 | `scripts/dy-ui-check.mjs` | 登入牆 → 儀表板 → 抽屜 → 手機版面，console 錯誤即失敗 |
