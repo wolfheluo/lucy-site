@@ -65,7 +65,8 @@ pm2c() { sudo env PATH="$NODE_BIN:$PATH" pm2 "$@"; }
 # ── preflight：缺 .env 或 ecosystem 沒指向 current → 直接停手（不要弄壞線上）──
 [ -f "$APP_DIR/.env" ] || { echo "缺少 $APP_DIR/.env（production 會拒絕啟動）"; exit 1; }
 [ -f "$ECO" ] || { echo "缺少 pm2 ecosystem：$ECO"; exit 1; }
-grep -q "current/dist-server/server/index.js" "$ECO" \
+grep -q "current/dist-server/server/index.js" "$ECO" 2>/dev/null \
+  || sudo grep -q "current/dist-server/server/index.js" "$ECO" \
   || { echo "$ECO 的 script 尚未指向 ./current/dist-server/server/index.js"; \
        echo "請改 cwd=$APP_DIR、script=./current/dist-server/server/index.js 後再部署"; exit 1; }
 
