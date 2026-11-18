@@ -1,0 +1,7 @@
+# shell 腳本一律 LF：Windows 檢出成 CRLF 會讓 Linux 上的 `#!/usr/bin/env bash` 變
+# `bad interpreter: ...^M`（scripts/server-prune.sh 是直接在伺服器上跑的）
+*.sh text eol=lf
+
+# 內容需要逐位元一致 / 被當成資料處理的檔案
+*.json text eol=lf
+*.yml text eol=lf
