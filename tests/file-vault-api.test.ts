@@ -105,6 +105,7 @@ describe("file-vault 上傳/管理", () => {
     expect(first.file?.originalName).toBe("測試報告.txt");
     expect(first.file?.size).toBe(content.length);
     expect(first.file?.share).toBeNull();
+    expect(json.files[1].file?.originalName).toBe("b.bin");
     // 實體檔是 .dat 隔離
     const f = first.file!;
     expect(f.storedName.endsWith(".dat")).toBe(true);

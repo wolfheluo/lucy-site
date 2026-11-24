@@ -91,7 +91,9 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
       limits: { fileSize: MAX_UPLOAD_BYTES, files: 50, fields: 0, parts: 50 },
       defParamCharset: "utf8", // 中文檔名正確解碼（預設 latin1 會 mojibake）
     });
-    const results: UploadResultItem[] = [];
+    /** 依 part 順序保留結果（檔案寫入完成順序不可靠） */
+    const slots: (UploadResultItem | undefined)[] = [];
+    let partIndex = 0;
     /** 本次 request 建立的所有實體檔（M3：未成功 register 的於結束時一併清除） */
     const writtenStores: string[] = [];
     const registeredStores = new Set<string>();
@@ -108,6 +110,7 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
 
         bb.on("file", (_name, stream, info) => {
           pending++;
+          const slot = partIndex++;
           const stored = vault.newStoredName();
           writtenStores.push(stored);
           const dest = vault.filePath(stored);
@@ -124,9 +127,9 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
             pending--;
             try {
               if (failed) {
-                results.push({ ok: false, error: "寫入失敗" });
+                slots[slot] = { ok: false, error: "寫入失敗" };
               } else if (truncated) {
-                results.push({ ok: false, error: "檔案超過 2GB 上限" });
+                slots[slot] = { ok: false, error: "檔案超過 2GB 上限" };
               } else {
                 const rec = vault.register({
                   originalName: info.filename,
@@ -134,10 +137,10 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
                   storedName: stored,
                 });
                 registeredStores.add(stored);
-                results.push({ ok: true, file: rec });
+                slots[slot] = { ok: true, file: rec };
               }
             } catch (e) {
-              results.push({ ok: false, error: (e as Error).message });
+              slots[slot] = { ok: false, error: (e as Error).message };
             } finally {
               if (failed || truncated) {
                 try {
@@ -177,12 +180,6 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
           limitExceeded = true;
         });
         bb.on("close", () => {
-          if (limitExceeded) {
-            results.push({
-              ok: false,
-              error: "超過單次上傳上限（50 個檔案），其餘檔案未上傳",
-            });
-          }
           closed = true;
           maybeDone();
         });
@@ -207,6 +204,10 @@ export function registerFileVault(app: Hono, ctx: ServerToolContext): void {
       }
     }
 
+    const results = slots.filter((r): r is UploadResultItem => r !== undefined);
+    if (limitExceeded) {
+      results.push({ ok: false, error: "超過單次上傳上限（50 個檔案），其餘檔案未上傳" });
+    }
     if (results.length === 0) {
       return c.json({ ok: false, error: "沒有收到任何檔案" }, 400);
     }
