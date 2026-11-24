@@ -3,7 +3,7 @@
 //  - 全部走 live.douyin.com 的 webcast 端點，零瀏覽器
 //  - 實測（2026-11）：room/web/enter 未簽名回空 body → 先簽 a_bogus
 //  - gift/list、fansclub/* 可不簽；ranklist/audience 必須簽名
-//  - im/fetch 簽名與否都回空（環境限制），由引擎的 chat_ok 呈現
+//  - im/fetch 未簽名回空（2026-11 實測），必須帶 a_bogus；由引擎的 chat_ok 呈現
 //  - 每次請求都有 timeout 與有限重試，慢房不得卡住整個輪詢
 // =====================================================================
 import fs from "node:fs";
@@ -307,7 +307,7 @@ export class DyClient {
     return { members, total: String(d.user_count_desc || "") };
   }
 
-  // ---------- 3) 彈幕（免簽名，cursor 增量）----------
+  // ---------- 3) 彈幕（先簽名；未簽名回空 body，cursor 增量）----------
   async fetchChat(roomId: string, cursor = ""): Promise<DecodedIm> {
     const params: Record<string, string> = {
       resp_content_type: "protobuf",
@@ -340,7 +340,7 @@ export class DyClient {
       cursor,
     };
     const buf = await this.requestBuffer("/webcast/im/fetch/", params, "https://live.douyin.com/", {
-      signFirst: false,
+      signFirst: true,
     });
     return decodeIm(buf);
   }

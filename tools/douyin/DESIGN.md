@@ -40,6 +40,7 @@
 | 禮物面板虛高 | `pushChat` 在 `seenSet` 去重**之前**累加 `giftTotal`／`gifters`（`engine.ts:540-555`） | 重複投遞時面板與 DB 不一致 |
 | 禮物以暱稱聚合 | `gifters` key 是 nickname（`engine.ts:162`） | 同名合併、改名分裂 |
 | 簽名器狀態污染 | `abogus.ts` 的 `transformBytes` 就地改寫 `this.bigArray`；同一個 signer 第二次之後的 `a_bogus` 無效 | 觀眾榜只有第一次成功（合併時已修正） |
+| 彈幕端點也要簽名 | `im/fetch` 未簽名回 200 空 body；舊 `dy-monitor` 把它當免簽名端點 | 舊版彈幕一直是空的（已修正為先簽名） |
 | 文件與程式漂移 | `tools/dy-enter/README.md:16` 說 Chat 丟棄，`engine.ts:295-297` 實際落庫 | 維運誤判 |
 | health 恆真 | `tools/dy-enter/server/router.ts:181` `Boolean(env || true)` | cookie 失效時仍顯示正常 |
 
@@ -458,10 +459,10 @@ CREATE INDEX ix_notifications_ts ON notifications(ts DESC);
 | `gift/list` | 200 正常（1153 項） | 200 正常 | 兩種都可 |
 | `fansclub/club_user_list` | 200 正常 | 200 正常 | 兩種都可 |
 | `ranklist/audience` | 200 空 body | 200 正常 | 必須簽名 |
-| `im/fetch` | 200 空 body | 200 空 body | 本機全變體皆空，待 production 驗證 |
+| `im/fetch` | 200 空 body | 200 正常（protobuf） | **必須簽名**；實測 7.8–15.6 KB、msgs 0–4 |
 
-因此 `DyClient` 的 live webcast 請求一律「先簽名，失敗再退回未簽名」；`im/fetch` 的
-`chat_ok` 要能在 `/health` 看見，不能用「登入有效」推論聊天可用。
+因此 `DyClient` 的 live webcast 請求一律「先簽名，失敗再退回未簽名」；`im/fetch` 也適用。
+`chat_ok` 仍要能在 `/health` 看見，不能用「登入有效」推論聊天可用。
 
 ---
 
@@ -644,8 +645,8 @@ export const douyinMeta: ToolMeta = { id: "douyin", title: "DOUYIN LIVE", zhTitl
 8. **`partial` 的意義**：900 秒內復播會把兩段合併成同一場並標 `partial=1`；報表解讀時要看這個旗標。
 9. **簽名要求會變**：2026-11 實測 `room/web/enter` 未簽名回空 body（`gift/list`、`fansclub`
    仍可不簽）。設計改成一律先簽名並保留未簽名 fallback，避免端點政策再變時整個工具停擺。
-10. **`im/fetch` 尚未驗證**：本機（台灣 IP、新帳號）所有變體都回空；需在 production 或既有
-   可用環境確認。若 production 也空，聊天與進場名單會沒有資料，這是合併前必須先確認的事。
+10. **`im/fetch` 必須簽名**：未簽名回 200 空 body，簽名後正常（實測 msgs 0–4）。舊
+   `dy-monitor` 把它當免簽名端點，所以舊版彈幕其實一直是空的；合併版已改為先簽名。
 11. **簽名器必須無狀態**：`Abogus.transformBytes` 會就地改寫置換表；每次簽名都要用副本，
    否則只有第一次請求成功。已加 `tests/douyin-abogus.test.ts` 鎖住。
 12. **房間回空不是網路錯誤**：`room/web/enter` 對已下播／不存在的房回空 body；引擎視為
@@ -675,10 +676,10 @@ export const douyinMeta: ToolMeta = { id: "douyin", title: "DOUYIN LIVE", zhTitl
   `cookie.ts`、`dycore.ts`、`engine.ts`、`router.ts`、`client/`（api／DouyinPage／douyin.css）。
 - 註冊：`server/registry.ts` 已加入；`src/tools.ts` 與 `App.tsx` 已掛 `/tools/douyin`（含分頁路由）。
 - 測試：`douyin-store` 17、`douyin-cookie` 15、`douyin-engine` 11、`douyin-api` 13、
-  `douyin-abogus` 2（共 58）。
-- 實測（真 cookie）：`room/web/enter` 與 `gift/list` 簽名後正常；`profile/self` 與 `profile/other`
-  正常；`ranklist/audience` 簽名正常；`im/fetch` 仍回空 → `chat_ok=false`，UI 會明示。
+  `douyin-abogus` 2、`douyin-chat` 1（共 59）。
+- 實測（真 cookie）：`room/web/enter`、`gift/list`、`ranklist/audience` 簽名後正常；
+  `profile/self` 與 `profile/other` 正常；`im/fetch` 簽名後回 protobuf（實測 `66666666`、
+  Member 事件），`chat_ok=true`。
 - UI 驗證：登入牆 → 監控（KPI／人數曲線／榜單）→ cookie pill／modal（重新檢查顯示已登入）；
   名單／歷史分頁可載入。
-- 尚未做：歷史詳情與回放（Phase 3）、舊工具下線與舊 DB 處理（Phase 4）、`im/fetch` 的
-  production 驗證或 `msToken` 對策。
+- 尚未做：歷史詳情與回放（Phase 3）、舊工具下線與舊 DB 處理（Phase 4）。
