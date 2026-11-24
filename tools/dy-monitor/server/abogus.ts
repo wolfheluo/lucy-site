@@ -109,7 +109,8 @@ export class Abogus implements AbogusSigner {
 
   // ---------- 自訂位元組置換（stateful，與 Python 版同一個 big_array 演算法）----------
   private transformBytes(bytesList: number[]): string {
-    const arr = this.bigArray;
+    // 置換表會被就地改寫：每次簽名用乾淨副本，否則第二次之後的 a_bogus 會失效
+    const arr = [...this.bigArray];
     const chars = bytesList.map((c) => String.fromCharCode(c)).join("");
     const result: number[] = [];
     let indexB = arr[1]!;
