@@ -59,12 +59,15 @@ data/           SQLite + 上傳檔（gitignored）
 
 | id | 名稱 | 做什麼 | 資料 |
 |---|---|---|---|
+| `douyin` | DOUYIN LIVE 抖音直播（Phase 1） | 監控＋進場名單＋歷史三分頁；單引擎、cookie 熱更新、事件唯一真相 | `dy.db`（新） |
 | `file-vault` | FILE VAULT 檔案保險箱 | 上傳後 72 小時自動湮滅；分享連結以 4 位 PIN 保護，錯 3 次鎖 60 秒；公開下載走 `/s/:shareId` | `vault.db` |
 | `binance-api` | BINANCE QUANT 幣安即時量化監控 | BTCUSDT 永續：成交、1 分 CVD、未平倉量、深度失衡、大額爆倉（預設 ≥50k USDT）；兩套紙上策略（`cvd_breakout`、`liquidation_reversal`），SSE 推送面板 | `vault.db` |
 | `dy-monitor` | DOUYIN MONITOR 抖音直播監控台 | 直播間數據觀測：在線人數曲線、彈幕、禮物貢獻榜、粉絲親密度、開播／下播通知（LINE），場次永久保存可複盤 | `dy-monitor.db` |
 | `dy-enter` | ENTER LOG 抖音進場名單 | 只記錄進場：uid／抖音號／進場次數，標註「神秘人」與「疑似隱身」，場次可切回 | `dy-enter.db` |
 
 - 工具頁面與作品集卡片由 `tools/<id>/meta.ts` 產生，不需手動加路由或卡片。
+- `douyin` 是 `dy-monitor`／`dy-enter` 的合併版（Phase 1）；兩套舊工具在 Phase 4 前仍保留，
+  **不要同時把同一間房開在兩邊**（會回到雙份輪詢）。
 - 抖音相關工具使用未公開的 webcast 端點，實作細節與已知限制分別見 `tools/dy-monitor/README.md`、`tools/dy-enter/README.md`。
 
 ## 架構要點
@@ -98,17 +101,19 @@ data/           SQLite + 上傳檔（gitignored）
 | 變數 | 工具 | 說明 |
 |---|---|---|
 | `API_KEY` | DeepSeek | nav 的 CNY 餘額查詢；未設 → 該區塊隱藏 |
-| `DY_COOKIE_FILE` | dy-monitor / dy-enter | 抖音 cookie 檔路徑（JSON 陣列或原始 header），預設 `~/dy_cookies.json` |
+| `DY_COOKIE_FILE` | dy-monitor / dy-enter / douyin | 抖音 cookie 檔路徑（JSON 陣列或原始 header），預設 `~/dy_cookies.json`；douyin 可在 `/tools/douyin` 的 cookie modal 貼上熱更新 |
 | `DY_DASHBOARD_URL` | dy-monitor | 通知訊息附帶的連結 |
 | `DY_MONITOR_DISABLE` / `DY_ENTER_DISABLE` | 各自 | `1` 停用該引擎（維運或測試時） |
 | `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_TO` | dy-monitor | LINE Messaging API；未設時通知仍會落庫（`ok=0` 附原因） |
 | `BQ_DEMO` | binance-api | `1` 使用假行情來源（測試／e2e 版面驗證用） |
+| `DOUYIN_DISABLE` | douyin | `1` 停用引擎（舊的 `DY_MONITOR_DISABLE`／`DY_ENTER_DISABLE` 只停舊工具） |
+| `DOUYIN_MAX_TARGETS` | douyin | 同時監控房間上限，預設 3、上限 5 |
 
 ## 路由
 
 | 類型 | 路徑 |
 |---|---|
-| 前端 | `/`、`/tools/:toolId`、`/tools/dy-monitor/history`、`/tools/dy-monitor/history/:sid`、`/s/:shareId` |
+| 前端 | `/`、`/tools/:toolId`、`/tools/douyin`（`/entrants`、`/history`）、`/tools/dy-monitor/history`、`/tools/dy-monitor/history/:sid`、`/s/:shareId` |
 | 平台 API | `/api/health`、`/api/auth/{login,logout,me}`、`/api/deepseek/balance` |
 | 工具 API | `/api/tools/<id>/*`（各自掛載；管理端需 session） |
 

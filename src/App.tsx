@@ -36,6 +36,8 @@ export default function App() {
             </Suspense>
           }
         />
+        <Route path="/tools/douyin" element={<ToolShell fixedToolId="douyin" />} />
+        <Route path="/tools/douyin/*" element={<ToolShell fixedToolId="douyin" />} />
         <Route path="/tools/:toolId" element={<ToolShell />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

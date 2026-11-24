@@ -15,12 +15,15 @@ import { dyMonitorMeta } from "../tools/dy-monitor/meta.js";
 import { registerDyMonitor } from "../tools/dy-monitor/server/router.js";
 import { dyEnterMeta } from "../tools/dy-enter/meta.js";
 import { registerDyEnter } from "../tools/dy-enter/server/router.js";
+import { douyinMeta } from "../tools/douyin/meta.js";
+import { registerDouyin } from "../tools/douyin/server/router.js";
 
 export const SERVER_TOOLS: ServerToolModule[] = [
   { meta: fileVaultMeta, register: registerFileVault },
   { meta: binanceApiMeta, register: registerBinanceApi },
   { meta: dyMonitorMeta, register: registerDyMonitor },
   { meta: dyEnterMeta, register: registerDyEnter },
+  { meta: douyinMeta, register: registerDouyin },
 ];
 
 /** 依序讓每個 tool 把自己的路由掛到 app；收集各 tool 的生命週期 handle */

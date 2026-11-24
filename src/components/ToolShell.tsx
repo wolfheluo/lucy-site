@@ -9,8 +9,9 @@ import ToolFrame from "./ToolFrame";
 /** 需要「整頁鎖高、免滾動」的工具（≥981px；窄版自動退回自然滾動） */
 const LOCKED_TOOLS = new Set(["binance-api", "dy-monitor"]);
 
-export default function ToolShell() {
-  const { toolId } = useParams();
+export default function ToolShell({ fixedToolId }: { fixedToolId?: string }) {
+  const params = useParams();
+  const toolId = fixedToolId ?? params.toolId;
   const tool = CLIENT_TOOLS.find((t) => t.meta.id === toolId);
 
   useEffect(() => {

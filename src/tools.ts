@@ -8,6 +8,7 @@ import { fileVaultMeta, fileVaultProjectCard } from "../tools/file-vault/meta";
 import { binanceApiMeta, binanceApiProjectCard } from "../tools/binance-api/meta";
 import { dyMonitorMeta, dyMonitorProjectCard } from "../tools/dy-monitor/meta";
 import { dyEnterMeta, dyEnterProjectCard } from "../tools/dy-enter/meta";
+import { douyinMeta, douyinProjectCard } from "../tools/douyin/meta";
 
 export interface ClientTool {
   meta: ToolMeta;
@@ -19,8 +20,10 @@ const FileVaultPage = lazy(() => import("../tools/file-vault/client/FileVaultPag
 const BinanceApiPage = lazy(() => import("../tools/binance-api/client/BinanceApiPage"));
 const DyMonitorPage = lazy(() => import("../tools/dy-monitor/client/DyMonitorPage"));
 const DyEnterPage = lazy(() => import("../tools/dy-enter/client/DyEnterPage"));
+const DouyinPage = lazy(() => import("../tools/douyin/client/DouyinPage"));
 
 export const CLIENT_TOOLS: ClientTool[] = [
+  { meta: douyinMeta, Component: DouyinPage, projectCard: douyinProjectCard },
   { meta: fileVaultMeta, Component: FileVaultPage, projectCard: fileVaultProjectCard },
   { meta: binanceApiMeta, Component: BinanceApiPage, projectCard: binanceApiProjectCard },
   { meta: dyMonitorMeta, Component: DyMonitorPage, projectCard: dyMonitorProjectCard },
